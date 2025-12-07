@@ -1,629 +1,1243 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import '@fortawesome/fontawesome-free/css/all.min.css';
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { toast, Toaster } from "react-hot-toast";
+import { showValidationSuccessAlert } from "../utils/validatealert";
+import {
+  FiGrid,
+  FiSearch,
+  FiBarChart2,
+  FiBell,
+  FiSettings,
+  FiLogOut,
+  FiCheckCircle,
+  FiXCircle,
+  FiClock,
+  FiUser,
+  FiMail,
+  FiCalendar,
+  FiFileText,
+  FiAlertCircle,
+  FiLoader,
+  FiInbox,
+  FiInfo,
+  FiMapPin,
+  FiDollarSign,
+  FiPackage,
+  FiTag,
+  FiX,
+  FiHome,
+  FiGlobe,
+} from "react-icons/fi";
+import logo from "../assets/chaincarbon_logo_transparent.png";
+import API from "../api/axios";
 
-const NotifikasiRegulator = () => {
-  const [isSidebarExpanded, setSidebarExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState('semua');
-  const [selectedStatus, setSelectedStatus] = useState('semua');
-  
-  // Menu sidebar - sama dengan dashboard, audit, dan laporan
+const POLL_INTERVAL = 5000;
+
+const RegulatorNotification = () => {
+  const navigate = useNavigate();
+  const [activeMenu] = useState("notifikasi");
+  const [activeTab, setActiveTab] = useState("all");
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [notifikasiPendaftaranAkun, setAccountRegistrationNotifications] = useState([]);
+  const [notifikasiProyek, setProjectNotifications] = useState([]);
+  // eslint-disable-next-line no-unused-vars
+  const [notifikasiRetirement, setRetirementNotifications] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [userDetails, setUserDetails] = useState(null);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [rejectedUsers, setRejectedUsers] = useState([]);
+  const [rejectedProjects, setRejectedProjects] = useState([]);
+  const pollRef = useRef(null);
+  const isMountedRef = useRef(true);
+
+  // fetch functions (useCallback for stable identity)
+  const fetchPendingUsers = useCallback(async () => {
+    try {
+      const res = await API.get("/regulator/pending-users");
+      const data = res.data;
+      if (data.success) {
+        if (!isMountedRef.current) return;
+        setAccountRegistrationNotifications(
+          data.data.map((u) => ({
+            id: u.id,
+            tipe: "account",
+            nama: u.company,
+            companyid: u.company_id,
+            email: u.email,
+            jenis: u.type,
+            tanggal: new Date(u.created_at).toISOString().split("T")[0],
+            status: "pending",
+            detail: `Account registration request for company ${u.company}`,
+            fullData: u,
+          }))
+        );
+      }
+    } catch (e) {
+      console.error("Error fetch users:", e);
+    }
+  }, []);
+
+  const fetchPendingProjects = useCallback(async () => {
+    try {
+      const res = await API.get("/projects/regulator/pending-projects");
+      const data = res.data;
+      if (data.success) {
+        if (!isMountedRef.current) return;
+        setProjectNotifications(
+          data.data.map((p) => ({
+            id: p.project_id,
+            tipe: "project",
+            nama: p.title,
+            email: p.email,
+            jenis: p.category,
+            tanggal: new Date(p.created_at).toISOString().split("T")[0],
+            status: "pending",
+            detail: `Project submission for ${p.title} by ${p.email}`,
+            fullData: p,
+          }))
+        );
+      }
+    } catch (e) {
+      console.error("Error fetch projects:", e);
+    }
+  }, []);
+
+  const fetchRejectedUsers = useCallback(async () => {
+    try {
+      const res = await API.get("/regulator/rejected-users");
+      const data = res.data;
+      if (data.success) {
+        if (!isMountedRef.current) return;
+        setRejectedUsers(data.data);
+      }
+    } catch (e) {
+      console.error("Error fetch rejected users:", e);
+    }
+  }, []);
+
+  const fetchRejectedProjects = useCallback(async () => {
+    try {
+      const res = await API.get("/regulator/rejected-projects?days=30");
+      const data = res.data;
+      if (data.success) {
+        if (!isMountedRef.current) return;
+        setRejectedProjects(data.data);
+        console.log(`✅ Fetched ${data.data.length} rejected projects`);
+      }
+    } catch (e) {
+      console.error("Error fetch rejected projects:", e);
+    }
+  }, []);
+
+  // single function to refresh all lists (used by polling and after actions)
+  const fetchAllNotifications = useCallback(async () => {
+    await Promise.all([
+      fetchPendingUsers(),
+      fetchPendingProjects(),
+      fetchRejectedUsers(),
+      fetchRejectedProjects(),
+    ]);
+  }, [fetchPendingUsers, fetchPendingProjects, fetchRejectedUsers, fetchRejectedProjects]);
+
+  // initial load + polling setup
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    // initial load
+    fetchAllNotifications();
+
+    // start polling
+    pollRef.current = setInterval(() => {
+      // optional: skip polling if a modal is open to avoid UI jump
+      if (showProjectModal || selectedUser) {
+        // skip refresh while admin is reviewing to avoid disrupting their action
+        return;
+      }
+      fetchAllNotifications();
+    }, POLL_INTERVAL);
+
+    return () => {
+      // cleanup
+      isMountedRef.current = false;
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+    // intentionally not including showProjectModal/selectedUser in deps so interval doesn't recreate frequently
+    // fetchAllNotifications is stable via useCallback
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchAllNotifications]);
+
   const sidebarMenu = [
-    { 
-      id: 'dashboard', 
-      icon: 'fas fa-tachometer-alt', 
-      text: 'Dashboard', 
-      link: '/regulator-dashboard' 
-    },
-    { 
-      id: 'audit', 
-      icon: 'fas fa-search', 
-      text: 'Audit & Inspeksi', 
-      link: '/regulator-dashboard/audit'
-    },
-    { 
-      id: 'laporan', 
-      icon: 'fas fa-chart-line', 
-      text: 'Laporan & Analisis', 
-      link: '/regulator-dashboard/laporan'
-    },
-    { 
-      id: 'notifikasi', 
-      icon: 'fas fa-bell', 
-      text: 'Notifikasi', 
-      link: '/regulator-dashboard/notifikasi',
-      active: true
-    },
-    { 
-      id: 'pengaturan', 
-      icon: 'fas fa-cog', 
-      text: 'Pengaturan', 
-      link: '/regulator-dashboard/pengaturan' 
-    }
+    { id: "dashboard", icon: FiGrid, text: "Dashboard", link: "/regulator" },
+    { id: "audit", icon: FiSearch, text: "Audit & Inspection", link: "/regulator/audit" },
+    { id: "laporan", icon: FiBarChart2, text: "Reports & Analytics", link: "/regulator/laporan" },
+    { id: "notifikasi", icon: FiBell, text: "Notifications", link: "/regulator/notifikasi" },
+    { id: "pengaturan", icon: FiSettings, text: "Settings", link: "/regulator/pengaturan" },
   ];
 
-  // Data notifikasi pendaftaran akun
-  const notifikasiPendaftaranAkun = [
-    {
-      id: 1,
-      tipe: 'pendaftaran-akun',
-      nama: 'PT Green Energy Solution',
-      jenis: 'Perusahaan Penjual',
-      tanggal: '2025-04-22',
-      status: 'menunggu',
-      dokumen: [
-        { nama: 'Formulir Pendaftaran', url: '#' },
-        { nama: 'Akta Pendirian', url: '#' }
-      ],
-      detail: 'Pengajuan pendaftaran sebagai perusahaan penjual kredit karbon'
-    },
-    {
-      id: 2,
-      tipe: 'pendaftaran-akun',
-      nama: 'PT Sustainable Manufacturing',
-      jenis: 'Perusahaan Penjual',
-      tanggal: '2025-04-20',
-      status: 'menunggu',
-      dokumen: [
-        { nama: 'Formulir Pendaftaran', url: '#' },
-        { nama: 'Akta Pendirian', url: '#' }
-      ],
-      detail: 'Pengajuan pendaftaran sebagai perusahaan penjual kredit karbon'
-    },
-    {
-      id: 3,
-      tipe: 'pendaftaran-akun',
-      nama: 'PT Carbon Trade Indonesia',
-      jenis: 'Perantara Perdagangan',
-      tanggal: '2025-04-18',
-      status: 'disetujui',
-      dokumen: [
-        { nama: 'Formulir Pendaftaran', url: '#' },
-        { nama: 'Akta Pendirian', url: '#' }
-      ],
-      detail: 'Pengajuan pendaftaran sebagai perantara perdagangan kredit karbon'
-    },
-    {
-      id: 4,
-      tipe: 'pendaftaran-akun',
-      nama: 'PT Urban Development',
-      jenis: 'Perusahaan Pembeli',
-      tanggal: '2025-04-15',
-      status: 'ditolak',
-      dokumen: [
-        { nama: 'Formulir Pendaftaran', url: '#' },
-      ],
-      detail: 'Pengajuan pendaftaran sebagai perusahaan pembeli kredit karbon',
-      alasanPenolakan: 'Dokumen tidak lengkap. Akta pendirian perusahaan tidak disertakan.'
-    }
+  const semuaNotifikasi = [
+    ...notifikasiPendaftaranAkun,
+    ...notifikasiProyek,
+    ...notifikasiRetirement,
   ];
 
-  // Data notifikasi proyek
-  const notifikasiProyek = [
-    {
-      id: 5,
-      tipe: 'proyek',
-      nama: 'Rehabilitasi Mangrove Kepulauan Seribu',
-      perusahaan: 'PT Green Energy Solution',
-      lokasi: 'Kepulauan Seribu, DKI Jakarta',
-      tipeProyek: 'Restorasi Ekosistem',
-      tanggal: '2025-04-23',
-      status: 'menunggu',
-      estimasiKredit: 5000,
-      dokumen: [
-        { nama: 'Proposal Proyek', url: '#' },
-        { nama: 'Studi Kelayakan', url: '#' },
-        { nama: 'Izin Lingkungan', url: '#' }
-      ],
-      detail: 'Proyek rehabilitasi 200 hektar mangrove di Kepulauan Seribu'
-    },
-    {
-      id: 6,
-      tipe: 'proyek',
-      nama: 'PLTS Atap Gedung Industri',
-      perusahaan: 'PT Sustainable Manufacturing',
-      lokasi: 'Karawang, Jawa Barat',
-      tipeProyek: 'Energi Terbarukan',
-      tanggal: '2025-04-19',
-      status: 'disetujui',
-      estimasiKredit: 3200,
-      dokumen: [
-        { nama: 'Proposal Proyek', url: '#' },
-        { nama: 'Studi Kelayakan', url: '#' },
-        { nama: 'Izin Lingkungan', url: '#' }
-      ],
-      detail: 'Pembangunan PLTS atap di 15 gedung industri dengan total kapasitas 5 MW'
-    },
-    {
-      id: 7,
-      tipe: 'proyek',
-      nama: 'Konversi Boiler Batubara ke Biomassa',
-      perusahaan: 'PT Sustainable Manufacturing',
-      lokasi: 'Bekasi, Jawa Barat',
-      tipeProyek: 'Efisiensi Energi',
-      tanggal: '2025-04-17',
-      status: 'ditolak',
-      estimasiKredit: 2800,
-      dokumen: [
-        { nama: 'Proposal Proyek', url: '#' },
-        { nama: 'Studi Kelayakan', url: '#' }
-      ],
-      detail: 'Konversi 8 boiler berbahan bakar batubara ke biomassa',
-      alasanPenolakan: 'Data pengurangan emisi tidak didukung metodologi yang valid. Sumber biomassa tidak terverifikasi keberlanjutannya.'
-    }
-  ];
-
-  // Data notifikasi retirement unit karbon
-  const notifikasiRetirement = [
-    {
-      id: 8,
-      tipe: 'retirement',
-      nama: 'Retirement Unit Karbon - Program CSR',
-      perusahaan: 'PT Indonesia Consumer Goods',
-      tanggal: '2025-04-24',
-      status: 'menunggu',
-      jumlahUnit: 1200,
-      proyekSumber: 'PLTS Atap Gedung Industri',
-      dokumen: [
-        { nama: 'Formulir Retirement', url: '#' },
-        { nama: 'Bukti Kepemilikan Unit', url: '#' }
-      ],
-      detail: 'Retirement unit karbon untuk program CSR "Indonesia Hijau 2025"'
-    },
-    {
-      id: 9,
-      tipe: 'retirement',
-      nama: 'Retirement Unit Karbon - Offset Emisi 2024',
-      perusahaan: 'PT Tech Inovasi',
-      tanggal: '2025-04-22',
-      status: 'disetujui',
-      jumlahUnit: 850,
-      proyekSumber: 'Rehabilitasi Mangrove Kepulauan Seribu',
-      dokumen: [
-        { nama: 'Formulir Retirement', url: '#' },
-        { nama: 'Bukti Kepemilikan Unit', url: '#' },
-        { nama: 'Laporan Emisi 2024', url: '#' }
-      ],
-      detail: 'Retirement unit karbon untuk offset emisi operasional tahun 2024'
-    },
-    {
-      id: 10,
-      tipe: 'retirement',
-      nama: 'Retirement Unit Karbon - Program Net Zero',
-      perusahaan: 'PT Retail Indonesia',
-      tanggal: '2025-04-20',
-      status: 'ditolak',
-      jumlahUnit: 2000,
-      proyekSumber: 'Mixed',
-      dokumen: [
-        { nama: 'Formulir Retirement', url: '#' },
-        { nama: 'Bukti Kepemilikan Unit', url: '#' }
-      ],
-      detail: 'Retirement unit karbon untuk program Net Zero 2030',
-      alasanPenolakan: 'Bukti kepemilikan unit tidak mencukupi untuk jumlah yang diajukan. Mohon verifikasi ulang kepemilikan.'
-    }
-  ];
-
-  // Menggabungkan semua notifikasi
-  const semuaNotifikasi = [...notifikasiPendaftaranAkun, ...notifikasiProyek, ...notifikasiRetirement];
-
-  // Filter notifikasi berdasarkan tab aktif dan status
-  const filterNotifikasi = (notifikasi) => {
-    // Filter berdasarkan tab aktif
-    const filteredByTab = activeTab === 'semua' 
-      ? notifikasi 
-      : notifikasi.filter(item => item.tipe === activeTab);
-    
-    // Filter berdasarkan status
-    return selectedStatus === 'semua' 
-      ? filteredByTab 
-      : filteredByTab.filter(item => item.status === selectedStatus);
+  const filterNotifikasi = () => {
+    if (activeTab === "all") return semuaNotifikasi;
+    if (activeTab === "rejected-users")
+      return rejectedUsers.map((u) => ({
+        id: u.id,
+        tipe: "rejected-account",
+        nama: u.company,
+        email: u.email,
+        jenis: u.type,
+        tanggal: u.rejected_at,
+        status: "rejected",
+        detail: `Rejected: ${u.rejection_reason}`,
+        fullData: u,
+      }));
+    if (activeTab === "rejected-projects")
+      return rejectedProjects.map((p) => ({
+        id: p.project_id,
+        tipe: "rejected-project",
+        nama: p.title,
+        email: p.email,
+        jenis: p.category,
+        tanggal: p.rejected_at,
+        status: "rejected",
+        detail: `Rejected: ${p.rejection_reason}`,
+        fullData: p,
+      }));
+    return semuaNotifikasi.filter((n) => n.tipe === activeTab);
   };
 
-  // Hitung jumlah notifikasi per kategori
-  const countNotifikasi = (type) => {
-    if (type === 'semua') return semuaNotifikasi.length;
-    return semuaNotifikasi.filter(item => item.tipe === type).length;
+  const handleDetailClick = async (notif) => {
+    if (notif.tipe === "project") {
+      setSelectedProject(notif);
+      setShowProjectModal(true);
+    } else if (notif.tipe === "account") {
+      setUserDetails({
+        id: notif.id,
+        tipe: notif.tipe,
+        nama: notif.nama,
+        email: notif.email,
+        jenis: notif.jenis,
+        tanggal: notif.tanggal,
+        status: notif.status,
+        detail: notif.detail,
+        fullData: {
+          id: notif.fullData?.id || notif.id,
+          company: notif.fullData?.company || notif.nama,
+          company_id: notif.fullData?.company_id || "N/A",
+          email: notif.fullData?.email || notif.email,
+          type: notif.fullData?.type || notif.jenis,
+          website: notif.fullData?.website || null,
+          province: notif.fullData?.province || "Not provided",
+          city: notif.fullData?.city || "Not provided",
+          phone: notif.fullData?.phone || null,
+          address: notif.fullData?.address || null,
+          postal_code: notif.fullData?.postal_code || null,
+          created_at: notif.fullData?.created_at || notif.tanggal,
+          is_validated: notif.fullData?.is_validated || 0,
+          total_projects: 0,
+          total_carbon_credits: 0,
+        },
+      });
+      setSelectedUser(notif);
+    }
   };
 
-  // Function untuk mengubah status notifikasi
-  const handleStatusChange = (id, newStatus) => {
-    // Implementasi sebenarnya akan mengirim request ke API
-    // Untuk demo, kita akan melakukan log saja
-    console.log(`Mengubah status notifikasi ${id} menjadi ${newStatus}`);
-    alert(`Status notifikasi ${id} berhasil diubah menjadi ${newStatus}`);
+  const handleValidateProject = async () => {
+    const projectData = selectedProject.fullData;
+  
+    // ✅ Validation
+    if (!projectData?.est_volume || projectData.est_volume <= 0) {
+      alert("⚠️ Invalid certificate volume in project data");
+      return;
+    }
+    if (!projectData?.price_per_unit || projectData.price_per_unit <= 0) {
+      alert("⚠️ Invalid certificate price in project data");
+      return;
+    }
+    if (!projectData?.end_date) {
+      alert("⚠️ Invalid project end date");
+      return;
+    }
+  
+    setIsLoading(true);
+  
+    try {
+      console.log("📤 Validating project:", {
+        projectId: selectedProject.id,
+        certAmount: parseInt(projectData.est_volume),
+        certPricePerUnit: parseInt(projectData.price_per_unit),
+        expiresAt: projectData.end_date,
+      });
+  
+      const response = await API.post("/projects/regulator/validate-project", {
+        projectId: selectedProject.id,
+        certAmount: parseInt(projectData.est_volume),
+        certPricePerUnit: parseInt(projectData.price_per_unit),
+        expiresAt: projectData.end_date,
+      });
+  
+      console.log("📥 Validation response:", response);
+  
+      const data = response.data;
+  
+      // ✅ Check success (accept both 200 and 201)
+      if ((response.status === 200 || response.status === 201) && data.success) {
+        console.log("✅ Project validated successfully");
+        
+        // ✅ Show success alert
+        try {
+          showValidationSuccessAlert(data, projectData, selectedProject);
+        } catch (alertError) {
+          console.error("⚠️ Error showing alert (but validation succeeded):", alertError);
+          // Still show basic success message if custom alert fails
+          alert(`✅ Project "${selectedProject.nama}" validated successfully!\n\nCertificate ID: ${data.data?. cert_id || 'N/A'}`);
+        }
+  
+        // ✅ Refresh and close
+        await fetchAllNotifications();
+        setShowProjectModal(false);
+        setSelectedProject(null);
+      } else {
+        // ❌ API returned error
+        console.error("❌ Validation failed:", data);
+        alert(`❌ Failed to validate project: ${data.message || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("❌ Error validating project:", error);
+      
+      // ✅ Better error message
+      let errorMessage = "An error occurred while validating the project";
+      
+      if (error.response) {
+        // Server responded with error
+        console.error("Response error:", error.response.data);
+        errorMessage = error.response.data?. message || `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        // No response received
+        console.error("No response:", error.request);
+        errorMessage = "No response from server.  Please check your connection.";
+      } else {
+        // Other errors
+        console.error("Error details:", error.message);
+        errorMessage = error.message;
+      }
+      
+      alert(`❌ ${errorMessage}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRejectProject = async () => {
+    const reason = prompt("Enter rejection reason:");
+    if (!reason) return;
+
+    setIsLoading(true);
+
+    try {
+      const response = await API.post("/projects/regulator/reject-project", {
+        projectId: selectedProject.id,
+        reason,
+      });
+      const data = response.data;
+      if (response.status === 200 && data.success) {
+        alert(`❌ Project "${selectedProject.nama}" rejected`);
+        // refresh lists after action
+        await fetchAllNotifications();
+        setShowProjectModal(false);
+        setSelectedProject(null);
+      } else {
+        alert(`Failed to reject project: ${data.message}`);
+      }
+    } catch (error) {
+      console.error("Error rejecting project:", error);
+      alert("Failed to reject project");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (id, newStatus, tipe) => {
+    setIsLoading(true);
+
+    try {
+      // Approve user
+      if (tipe === "account" && newStatus === "approved") {
+        const response = await API.post("/regulator/validate-user", { userId: id });
+        const data = response.data;
+        if (response.status === 200 && data.success) {
+          toast.success("User approved");
+          // refresh lists after action
+          await fetchAllNotifications();
+          setSelectedUser(null);
+          setUserDetails(null);
+        } else {
+          toast.error(`Failed to approve user: ${data.message}`);
+        }
+      }
+
+      // Reject user
+      if (tipe === "account" && newStatus === "rejected") {
+        const reason = prompt("Enter rejection reason:");
+        if (!reason) {
+          setIsLoading(false);
+          return;
+        }
+        const response = await API.post("/regulator/reject-user", { userId: id, reason });
+        const data = response.data;
+        if (response.status === 200 && data.success) {
+          toast.success("❌ User rejected");
+          // refresh lists after action
+          await fetchAllNotifications();
+          setSelectedUser(null);
+          setUserDetails(null);
+        } else {
+          toast.error(`Failed to reject user: ${data.message}`);
+        }
+      }
+    } catch (e) {
+      console.error("Error in handleStatusChange:", e);
+      toast.error("Failed to update status: " + e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/");
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleDateString("en-US", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  };
+
+  const calculateDuration = (startDate, endDate) => {
+    if (!startDate || !endDate) return "-";
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const years = Math.floor(diffDays / 365);
+    const months = Math.floor((diffDays % 365) / 30);
+
+    if (years > 0) {
+      return `${years} years ${months} months`;
+    }
+    return `${months} months`;
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar - sama dengan dashboard, audit, dan laporan */}
-      <div 
-        className={`bg-[#1D3C34] text-white transition-all duration-300 ease-in-out ${isSidebarExpanded ? 'w-64' : 'w-20'} h-full`} 
-        onMouseEnter={() => setSidebarExpanded(true)}
-        onMouseLeave={() => setSidebarExpanded(false)}
-      >
-        {/* Logo dan Judul */}
-        <div className="flex items-center justify-center py-6 border-b border-green-700">
-          <i className="fas fa-leaf text-2xl text-green-400"></i>
-          <h2 className={`ml-3 font-bold text-xl transition-opacity duration-300 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-            PT LEDGRON
-          </h2>
-        </div>
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+      <Toaster
+        position="top-center"
+        reverseOrder={false}
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: "#363636",
+            color: "#fff",
+            padding: "16px",
+            borderRadius: "10px",
+            fontSize: "14px",
+            maxWidth: "500px",
+          },
+          success: {
+            background: "#10b981",
+          },
+          error: {
+            background: "#ef4444",
+          },
+          loading: {
+            background: "#3b82f6",
+          },
+        }}
+        containerStyle={{ top: 80 }}
+      />
 
-        {/* Menu Items */}
-        <div className="mt-8">
-          {sidebarMenu.map((item) => (
-            <Link to={item.link} key={item.id}>
-              <div className={`flex items-center px-6 py-4 hover:bg-green-800 transition duration-200 cursor-pointer ${item.active ? 'bg-green-800' : ''}`}>
-                <div className={`flex items-center justify-center ${isSidebarExpanded ? 'w-8' : 'w-full'}`}>
-                  <i className={`${item.icon} text-xl text-green-300`}></i>
-                </div>
-                <span className={`ml-4 transition-opacity duration-300 whitespace-nowrap ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-                  {item.text}
-                </span>
-                {item.active && item.id === 'notifikasi' && (
-                  <div className={`ml-auto bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center transition-opacity duration-300 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-                    {semuaNotifikasi.filter(n => n.status === 'menunggu').length}
-                  </div>
-                )}
-              </div>
-            </Link>
-          ))}
+      {/* Loading Overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-2xl shadow-2xl">
+            <FiLoader className="animate-spin h-16 w-16 text-emerald-600 mx-auto mb-4" />
+            <p className="text-gray-700 font-semibold text-lg">Processing...</p>
+          </div>
         </div>
+      )}
 
-        {/* Logout at bottom */}
-        <div className="absolute bottom-0 w-full border-t border-green-700">
-          <Link to="/logout">
-            <div className="flex items-center px-6 py-4 hover:bg-green-800 transition duration-200 cursor-pointer">
-              <div className={`flex items-center justify-center ${isSidebarExpanded ? 'w-8' : 'w-full'}`}>
-                <i className="fas fa-sign-out-alt text-xl text-green-300"></i>
-              </div>
-              <span className={`ml-4 transition-opacity duration-300 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-                Keluar
-              </span>
+      {/* Sidebar */}
+      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center space-x-3">
+            <img src={logo} alt="ChainCarbon" className="w-10 h-10" />
+            <div>
+              <h1 className="text-xl font-bold text-gray-800">ChainCarbon</h1>
+              <p className="text-xs text-gray-500">Regulator Portal</p>
             </div>
-          </Link>
+          </div>
         </div>
-      </div>
+
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {sidebarMenu.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeMenu === item.id;
+
+            return (
+              <Link
+                key={item.id}
+                to={item.link}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                  isActive
+                    ? "bg-gradient-to-r from-emerald-50 to-cyan-50 text-emerald-700 font-semibold shadow-sm"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-emerald-600"
+                }`}
+              >
+                <Icon
+                  className={`w-5 h-5 ${
+                    isActive ? "text-emerald-600" : "text-gray-500"
+                  }`}
+                />
+                <span className="text-sm">{item.text}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="p-4 border-t border-gray-200">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all duration-200 w-full"
+          >
+            <FiLogOut className="w-5 h-5" />
+            <span className="text-sm font-medium">Log Out</span>
+          </button>
+        </div>
+      </aside>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-white shadow-md p-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <Link to="/regulator-dashboard" className="text-gray-500 hover:text-[#1D3C34] mr-2">
-                <i className="fas fa-arrow-left"></i>
-              </Link>
-              <h1 className="text-2xl font-bold text-[#1D3C34]">Notifikasi</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <i className="fas fa-bell text-gray-600 cursor-pointer hover:text-[#1D3C34] transition"></i>
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                  {semuaNotifikasi.filter(n => n.status === 'menunggu').length}
-                </span>
+        <header className="bg-white border-b border-gray-200 px-8 py-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
+              <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                <Link to="/regulator" className="hover:text-emerald-600 transition-colors flex items-center gap-1">
+                  <FiGrid className="inline" /> Dashboard
+                </Link>
+                <span>/</span>
+                <span className="text-gray-700 font-medium">Notifications</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-[#1D3C34] rounded-full flex items-center justify-center text-white">
-                  <i className="fas fa-user"></i>
+            </div>
+            <div className="flex items-center space-x-6">
+              <div className="relative">
+                <FiBell className="w-6 h-6 text-gray-500 cursor-pointer hover:text-emerald-600 transition" />
+                {semuaNotifikasi.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
+                    {semuaNotifikasi.length}
+                  </span>
+                )}
+              </div>
+              <div className="w-px h-8 bg-gray-200" />
+              <div className="flex items-center space-x-3 cursor-pointer group">
+                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-full 
+                              flex items-center justify-center text-white shadow-lg transition-all group-hover:scale-105">
+                  <span className="font-bold text-base">AR</span>
                 </div>
-                <span className="font-medium">Admin</span>
+                <div>
+                  <p className="font-semibold text-gray-800 text-sm transition-colors group-hover:text-emerald-600">
+                    Admin Regulator
+                  </p>
+                  <p className="text-xs text-gray-400">System Supervisor</p>
+                </div>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Konten Notifikasi */}
-        <div className="p-6">
-          {/* Breadcrumb Navigation */}
-          <nav className="mb-6">
-            <ol className="flex text-sm">
-              <li className="flex items-center">
-                <Link to="/regulator-dashboard" className="text-blue-600 hover:text-blue-800">Dashboard</Link>
-                <i className="fas fa-chevron-right text-gray-400 mx-2"></i>
-              </li>
-              <li className="text-gray-700">Notifikasi</li>
-            </ol>
-          </nav>
-
-          {/* Judul Halaman dan Deskripsi */}
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold text-gray-800">Notifikasi & Verifikasi</h2>
-            <p className="text-gray-600 mt-2">Kelola dan verifikasi permohonan pendaftaran, proyek, dan retirement unit karbon</p>
-          </div>
-
-          {/* Tab Navigasi dan Filter */}
-          <div className="bg-white rounded-xl shadow-md mb-6">
-            <div className="border-b border-gray-200">
-              <div className="flex flex-wrap">
-                <button 
-                  className={`px-6 py-4 font-medium text-sm flex items-center ${activeTab === 'semua' ? 'text-[#1D3C34] border-b-2 border-[#1D3C34]' : 'text-gray-500 hover:text-[#1D3C34]'}`}
-                  onClick={() => setActiveTab('semua')}
-                >
-                  Semua
-                  <span className="ml-2 bg-gray-100 text-gray-700 rounded-full w-6 h-6 flex items-center justify-center text-xs">
-                    {countNotifikasi('semua')}
-                  </span>
-                </button>
-                <button 
-                  className={`px-6 py-4 font-medium text-sm flex items-center ${activeTab === 'pendaftaran-akun' ? 'text-[#1D3C34] border-b-2 border-[#1D3C34]' : 'text-gray-500 hover:text-[#1D3C34]'}`}
-                  onClick={() => setActiveTab('pendaftaran-akun')}
-                >
-                  Pendaftaran Akun
-                  <span className="ml-2 bg-gray-100 text-gray-700 rounded-full w-6 h-6 flex items-center justify-center text-xs">
-                    {countNotifikasi('pendaftaran-akun')}
-                  </span>
-                </button>
-                <button 
-                  className={`px-6 py-4 font-medium text-sm flex items-center ${activeTab === 'proyek' ? 'text-[#1D3C34] border-b-2 border-[#1D3C34]' : 'text-gray-500 hover:text-[#1D3C34]'}`}
-                  onClick={() => setActiveTab('proyek')}
-                >
-                  Proyek Karbon
-                  <span className="ml-2 bg-gray-100 text-gray-700 rounded-full w-6 h-6 flex items-center justify-center text-xs">
-                    {countNotifikasi('proyek')}
-                  </span>
-                </button>
-                <button 
-                  className={`px-6 py-4 font-medium text-sm flex items-center ${activeTab === 'retirement' ? 'text-[#1D3C34] border-b-2 border-[#1D3C34]' : 'text-gray-500 hover:text-[#1D3C34]'}`}
-                  onClick={() => setActiveTab('retirement')}
-                >
-                  Retirement Unit
-                  <span className="ml-2 bg-gray-100 text-gray-700 rounded-full w-6 h-6 flex items-center justify-center text-xs">
-                    {countNotifikasi('retirement')}
-                  </span>
-                </button>
-              </div>
-            </div>
-            
-            {/* Filter status */}
-            <div className="p-4 flex items-center justify-between">
-              <div className="flex items-center">
-                <span className="text-gray-700 mr-2">Filter Status:</span>
-                <select 
-                  className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
-                >
-                  <option value="semua">Semua Status</option>
-                  <option value="menunggu">Menunggu Verifikasi</option>
-                  <option value="disetujui">Disetujui</option>
-                  <option value="ditolak">Ditolak</option>
-                </select>
-              </div>
-              <div className="flex items-center">
-                <button className="bg-green-100 text-green-800 px-4 py-2 rounded-md text-sm font-medium hover:bg-green-200 transition mr-2">
-                  <i className="fas fa-sync-alt mr-2"></i>
-                  Refresh
-                </button>
-                <button className="bg-[#1D3C34] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-800 transition">
-                  <i className="fas fa-file-export mr-2"></i>
-                  Export
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Item Notifikasi */}
-          <div className="space-y-4 mb-8">
-            {filterNotifikasi(semuaNotifikasi).length > 0 ? (
-              filterNotifikasi(semuaNotifikasi).map((notifikasi) => (
-                <div key={notifikasi.id} className="bg-white rounded-xl shadow-md overflow-hidden">
-                  {/* Header Notifikasi - Warna berbeda sesuai status */}
-                  <div className={`px-6 py-4 flex items-center justify-between ${
-                    notifikasi.status === 'menunggu' 
-                      ? 'bg-yellow-50 border-l-4 border-yellow-400' 
-                      : notifikasi.status === 'disetujui'
-                        ? 'bg-green-50 border-l-4 border-green-400'
-                        : 'bg-red-50 border-l-4 border-red-400'
+        {/* Tabs */}
+        <div className="px-8 py-5 bg-white border-b border-gray-200">
+          <div className="flex space-x-3">
+            {[
+              { id: "all", label: "All", count: semuaNotifikasi.length },
+              { id: "account", label: "Account Registration", count: notifikasiPendaftaranAkun.length },
+              { id: "project", label: "Projects", count: notifikasiProyek.length },
+              { id: "retirement", label: "Retirement", count: notifikasiRetirement.length },
+              { id: "rejected-users", label: "Rejected Users", count: rejectedUsers.length }, // ✅ NEW
+              { id: "rejected-projects", label: "Rejected Projects", count: rejectedProjects.length }, // ✅ NEW
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all ${
+                  activeTab === tab.id
+                    ? "bg-gradient-to-r from-emerald-600 to-cyan-600 text-white shadow-lg"
+                    : "bg-white border-2 border-gray-200 text-gray-600 hover:border-emerald-300 hover:text-emerald-600"
+                }`}
+              >
+                {tab.label}
+                {tab.count > 0 && (
+                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${
+                    activeTab === tab.id ? "bg-white text-emerald-600" : "bg-red-100 text-red-600"
                   }`}>
-                    <div className="flex items-center">
-                      {/* Icon sesuai tipe notifikasi */}
-                      <div className={`rounded-full p-2 mr-4 ${
-                        notifikasi.tipe === 'pendaftaran-akun' 
-                          ? 'bg-blue-100 text-blue-600' 
-                          : notifikasi.tipe === 'proyek'
-                            ? 'bg-purple-100 text-purple-600'
-                            : 'bg-green-100 text-green-600'
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Notifications List */}
+        <main className="flex-1 overflow-y-auto p-8">
+          {filterNotifikasi().length === 0 ? (
+            <div className="text-center py-20">
+              <div className="inline-flex items-center justify-center w-24 h-24 bg-gray-100 rounded-full mb-6">
+                <FiInbox className="h-12 w-12 text-gray-400" />
+              </div>
+              <p className="text-2xl text-gray-600 font-semibold">
+                No notifications
+              </p>
+              <p className="text-gray-400 mt-3 text-lg">
+                {activeTab !== "all" && `No ${activeTab} to review`}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filterNotifikasi().map((n) => (
+                <div
+                  key={n.id}
+                  className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition-all"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className={`p-3 rounded-xl ${
+                        n.tipe === "account"
+                          ? "bg-blue-100" 
+                          : n.tipe === "project"
+                          ? "bg-emerald-100"
+                          : "bg-purple-100"
                       }`}>
-                        {notifikasi.tipe === 'pendaftaran-akun' && <i className="fas fa-user-plus text-lg"></i>}
-                        {notifikasi.tipe === 'proyek' && <i className="fas fa-project-diagram text-lg"></i>}
-                        {notifikasi.tipe === 'retirement' && <i className="fas fa-leaf text-lg"></i>}
+                        {n.tipe === "account" ? (
+                          <FiUser className={`h-6 w-6 ${
+                            n.tipe === "account" ? "text-blue-600" : "text-gray-600"
+                          }`} />
+                        ) : (
+                          <FiFileText className={`h-6 w-6 ${
+                            n.tipe === "project" ? "text-emerald-600" : "text-gray-600"
+                          }`} />
+                        )}
                       </div>
-                      
-                      <div>
-                        <h3 className="font-semibold text-lg text-gray-800">{notifikasi.nama}</h3>
-                        <div className="flex items-center text-sm">
-                          <span className="text-gray-600">
-                            {notifikasi.tipe === 'pendaftaran-akun' && `${notifikasi.jenis}`}
-                            {notifikasi.tipe === 'proyek' && `${notifikasi.perusahaan} • ${notifikasi.tipeProyek}`}
-                            {notifikasi.tipe === 'retirement' && `${notifikasi.perusahaan} • ${notifikasi.jumlahUnit} Unit`}
-                          </span>
-                          <span className="mx-2">•</span>
-                          <span className="text-gray-600">{notifikasi.tanggal}</span>
+                      <div className="flex-1">
+                        <h3 className="font-bold text-xl text-gray-800 mb-2">
+                          {n.nama}
+                        </h3>
+                        <p className="text-gray-600 text-sm mb-3 leading-relaxed">
+                          {n.detail}
+                        </p>
+                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-1.5">
+                            <FiMail className="h-4 w-4" />
+                            {n.email}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <FiCalendar className="h-4 w-4" />
+                            {formatDate(n.tanggal)}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <FiFileText className="h-4 w-4" />
+                            {n.jenis}
+                          </div>
                         </div>
                       </div>
                     </div>
-                    
-                    <div className="flex items-center">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        notifikasi.status === 'menunggu' 
-                          ? 'bg-yellow-100 text-yellow-800' 
-                          : notifikasi.status === 'disetujui'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                      }`}>
-                        {notifikasi.status === 'menunggu' && 'Menunggu Verifikasi'}
-                        {notifikasi.status === 'disetujui' && 'Disetujui'}
-                        {notifikasi.status === 'ditolak' && 'Ditolak'}
-                      </span>
+                    <span
+                      className={`px-4 py-2 rounded-full text-xs font-semibold flex items-center gap-1.5 ${
+                        n.status === "pending"
+                          ? "bg-yellow-100 text-yellow-700"
+                          : n.status === "approved"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {n.status === "pending" && <FiClock className="h-3.5 w-3.5" />}
+                      {n.status === "approved" && <FiCheckCircle className="h-3.5 w-3.5" />}
+                      {n.status === "rejected" && <FiXCircle className="h-3.5 w-3.5" />}
+                      {n.status === "pending" ? "Pending" : n.status === "approved" ? "Approved" : "Rejected"}
+                    </span>
+                  </div>
+                  {n.status === "pending" && (
+                    <button
+                      onClick={() => handleDetailClick(n)}
+                      className="w-full bg-gradient-to-r from-emerald-600 to-cyan-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all font-semibold flex items-center justify-center gap-2"
+                    >
+                      <FiSearch className="h-4 w-4" />
+                      Review & Validate
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </main>
+      </div>
+
+      {selectedUser && userDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Header - Professional Blue */}
+            <div className="bg-gradient-to-r from-slate-800 to-slate-700 p-6 text-white">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
+                      <FiUser className="h-6 w-6" />
+                    </div>
+                    <h2 className="text-2xl font-bold">Account Verification</h2>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedUser(null);
+                    setUserDetails(null);
+                  }}
+                  className="text-white/70 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-all"
+                >
+                  <FiX className="h-7 w-7" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content - Clean & Professional */}
+            <div className="p-8">
+              {/* Company Header Card */}
+              <div className="bg-slate-50 border-2 border-slate-200 rounded-xl p-6 mb-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-3">
+                      <FiHome className="h-5 w-5 text-slate-600" />
+                      <h3 className="text-2xl font-bold text-slate-900">{userDetails.fullData?.company}</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-3 text-sm">
+                      <div className="flex items-center gap-1.5 text-slate-600">
+                        <FiTag className="h-4 w-4" />
+                        <span className="font-medium">ID:</span>
+                        <code className="px-2 py-0.5 bg-white border border-slate-300 rounded text-slate-800 font-mono">
+                          {userDetails.fullData?.company_id}
+                        </code>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-600">
+                        <FiMail className="h-4 w-4" />
+                        <span>{userDetails.fullData?.email}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-600">
+                        <FiCalendar className="h-4 w-4" />
+                        <span>{formatDate(userDetails.fullData?.created_at)}</span>
+                      </div>
                     </div>
                   </div>
-                  
-                  {/* Konten Notifikasi */}
-                  <div className="px-6 py-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {/* Kolom Kiri - Detail */}
-                      <div className="md:col-span-2 space-y-4">
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-500 mb-1">Detail</h4>
-                          <p className="text-gray-700">{notifikasi.detail}</p>
-                        </div>
-                        
-                        {/* Tambahan detail sesuai tipe */}
-                        {notifikasi.tipe === 'proyek' && (
-                          <>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <h4 className="text-sm font-medium text-gray-500 mb-1">Lokasi</h4>
-                                <p className="text-gray-700">{notifikasi.lokasi}</p>
-                              </div>
-                              <div>
-                                <h4 className="text-sm font-medium text-gray-500 mb-1">Estimasi Kredit</h4>
-                                <p className="text-gray-700">{notifikasi.estimasiKredit} Ton CO2e</p>
-                              </div>
-                            </div>
-                          </>
-                        )}
-                        
-                        {notifikasi.tipe === 'retirement' && (
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-500 mb-1">Proyek Sumber</h4>
-                            <p className="text-gray-700">{notifikasi.proyekSumber}</p>
-                          </div>
-                        )}
-                        
-                        {/* Alasan Penolakan jika ditolak */}
-                        {notifikasi.status === 'ditolak' && (
-                          <div className="bg-red-50 p-3 rounded-md">
-                            <h4 className="text-sm font-medium text-red-800 mb-1">Alasan Penolakan</h4>
-                            <p className="text-red-700 text-sm">{notifikasi.alasanPenolakan}</p>
-                          </div>
-                        )}
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="px-3 py-1.5 bg-amber-100 text-amber-700 border border-amber-300 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                      <FiClock className="h-3.5 w-3.5" />
+                      Pending Approval
+                    </span>
+                    <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-md text-xs font-medium">
+                      #{userDetails.fullData?.id}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Data Grid - Professional Layout */}
+              <div className="space-y-4">
+                {/* Business Information */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-100 px-4 py-3 border-b border-slate-200">
+                    <h4 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                      <FiPackage className="h-4 w-4" />
+                      Business Information
+                    </h4>
+                  </div>
+                  <div className="p-4 bg-white">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                          Business Type
+                        </label>
+                        <p className="text-base font-medium text-slate-900">{userDetails.fullData?.type}</p>
                       </div>
-                      
-                      {/* Kolom Kanan - Dokumen dan Aksi */}
-                      <div className="space-y-4">
-                        {/* Dokumen */}
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-500 mb-2">Dokumen</h4>
-                          <div className="space-y-2">
-                            {notifikasi.dokumen.map((doc, index) => (
-                              <a 
-                                key={index}
-                                href={doc.url}
-                                className="flex items-center p-2 bg-gray-50 rounded-md hover:bg-gray-100 transition"
-                              >
-                                <i className="fas fa-file-alt text-gray-500 mr-2"></i>
-                                <span className="text-sm text-blue-600">{doc.nama}</span>
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                        
-                        {/* Tombol Aksi */}
-                        {notifikasi.status === 'menunggu' && (
-                          <div className="flex flex-col space-y-2">
-                            <button 
-                              onClick={() => handleStatusChange(notifikasi.id, 'disetujui')}
-                              className="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition flex items-center justify-center"
-                            >
-                              <i className="fas fa-check mr-2"></i>
-                              Setujui
-                            </button>
-                            <button 
-                              onClick={() => handleStatusChange(notifikasi.id, 'ditolak')}
-                              className="bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 transition flex items-center justify-center"
-                            >
-                              <i className="fas fa-times mr-2"></i>
-                              Tolak
-                            </button>
-                            <button 
-                              className="bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 transition flex items-center justify-center"
-                            >
-                              <i className="fas fa-info-circle mr-2"></i>
-                              Minta Info
-                            </button>
-                          </div>
-                        )}
-                        
-                        {/* Tombol Detail (untuk status selain menunggu) */}
-                        {notifikasi.status !== 'menunggu' && (
-                          <Link to={`/regulator-dashboard/notifikasi/${notifikasi.id}`} className="block w-full">
-                            <button className="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-300 transition flex items-center justify-center">
-                              <i className="fas fa-eye mr-2"></i>
-                              Lihat Detail
-                            </button>
-                          </Link>
-                        )}
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                          Company ID
+                        </label>
+                        <p className="text-base font-mono font-bold text-slate-900">{userDetails.fullData?.company_id}</p>
                       </div>
                     </div>
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="bg-white rounded-xl shadow-md p-8 text-center">
-                <div className="flex flex-col items-center justify-center">
-                  <i className="fas fa-inbox text-gray-300 text-5xl mb-4"></i>
-                  <h3 className="text-xl font-medium text-gray-700 mb-2">Tidak Ada Notifikasi</h3>
-                  <p className="text-gray-500">
-                    Tidak ada notifikasi yang sesuai dengan filter yang dipilih
+
+                {/* Contact Information */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-100 px-4 py-3 border-b border-slate-200">
+                    <h4 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                      <FiMail className="h-4 w-4" />
+                      Contact Information
+                    </h4>
+                  </div>
+                  <div className="p-4 bg-white">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                          Email Address
+                        </label>
+                        <p className="text-base font-medium text-slate-900 break-all">{userDetails.fullData?.email}</p>
+                      </div>
+                      {userDetails.fullData?.phone && (
+                        <div>
+                          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                            Phone Number
+                          </label>
+                          <p className="text-base font-medium text-slate-900">{userDetails.fullData.phone}</p>
+                        </div>
+                      )}
+                      {userDetails.fullData?.website && (
+                        <div className={userDetails.fullData?.phone ? "col-span-2" : "col-span-1"}>
+                          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                            Website
+                          </label>
+                          <a
+                            href={userDetails.fullData.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-base font-medium text-blue-600 hover:text-blue-700 hover:underline break-all inline-flex items-center gap-1"
+                          >
+                            {userDetails.fullData.website}
+                            <FiGlobe className="h-3.5 w-3.5" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Location Information */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-100 px-4 py-3 border-b border-slate-200">
+                    <h4 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                      <FiMapPin className="h-4 w-4" />
+                      Location Details
+                    </h4>
+                  </div>
+                  <div className="p-4 bg-white">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                          Province
+                        </label>
+                        <p className="text-base font-medium text-slate-900">
+                          {userDetails.fullData?.province || (
+                            <span className="text-slate-400 italic">Not provided</span>
+                          )}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                          City
+                        </label>
+                        <p className="text-base font-medium text-slate-900">
+                          {userDetails.fullData?.city || (
+                            <span className="text-slate-400 italic">Not provided</span>
+                          )}
+                        </p>
+                      </div>
+                      {userDetails.fullData?.address && (
+                        <div className="col-span-2">
+                          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                            Full Address
+                          </label>
+                          <p className="text-base font-medium text-slate-900">{userDetails.fullData.address}</p>
+                        </div>
+                      )}
+                      {userDetails.fullData?.postal_code && (
+                        <div>
+                          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">
+                            Postal Code
+                          </label>
+                          <p className="text-base font-medium text-slate-900">{userDetails.fullData.postal_code}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Registration Summary */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-100 px-4 py-3 border-b border-slate-200">
+                    <h4 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                      <FiInfo className="h-4 w-4" />
+                      Registration Summary
+                    </h4>
+                  </div>
+                  <div className="p-4 bg-white">
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <p className="text-xs text-slate-500 mb-1">User ID</p>
+                        <p className="text-lg font-bold text-slate-900">#{userDetails.fullData?.id}</p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <p className="text-xs text-slate-500 mb-1">Registered</p>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {new Date(userDetails.fullData?.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <p className="text-xs text-slate-500 mb-1">Status</p>
+                        <span className="inline-block px-2 py-1 bg-amber-100 text-amber-700 border border-amber-300 rounded text-xs font-semibold">
+                          Pending
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Important Notice */}
+              <div className="mt-6 bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg">
+                <div className="flex items-start gap-3">
+                  <FiAlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h5 className="font-semibold text-amber-900 text-sm mb-1">Verification Required</h5>
+                    <p className="text-sm text-amber-800 leading-relaxed">
+                      Please carefully verify all information before approving. Approved accounts will gain full access to the carbon credit trading system.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Footer - Clean & Professional */}
+            <div className="border-t-2 border-slate-200 bg-slate-50 p-6">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setSelectedUser(null);
+                    setUserDetails(null);
+                  }}
+                  disabled={isLoading}
+                  className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-white hover:border-slate-400 transition-all font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <FiX className="h-4 w-4" />
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleStatusChange(selectedUser.id, "rejected", selectedUser.tipe)}
+                  disabled={isLoading}
+                  className="flex-1 px-6 py-3 bg-white border-2 border-red-300 text-red-700 rounded-lg hover:bg-red-50 hover:border-red-400 transition-all font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <FiXCircle className="h-5 w-5" />
+                  Reject Application
+                </button>
+                <button
+                  onClick={() => handleStatusChange(selectedUser.id, "approved", selectedUser.tipe)}
+                  disabled={isLoading}
+                  className="flex-1 px-6 py-3 bg-green border-2 border-green-300 text-green-700 rounded-lg hover:bg-green-100 transition-all font-semibold disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg"
+                >
+                  <FiCheckCircle className="h-5 w-5" />
+                  Approve Account
+                </button>
+              </div>
+              <p className="text-xs text-slate-500 text-center mt-4">
+                Approving: <span className="font-semibold text-slate-700">{userDetails?.fullData?.company}</span> • 
+                ID: <span className="font-mono font-semibold text-slate-700">{userDetails?.fullData?.company_id}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Project Validation */}
+      {showProjectModal && selectedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-emerald-600 to-cyan-600 p-6 text-white">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <FiFileText className="h-6 w-6" />
+                Project Validation
+              </h2>
+              <p className="text-emerald-100 mt-1">{selectedProject.nama}</p>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Basic Information */}
+              <div className="bg-gradient-to-r from-gray-50 to-slate-50 rounded-xl p-5 border-2 border-gray-200">
+                <h3 className="font-bold text-lg mb-4 text-gray-800 flex items-center gap-2">
+                  <FiFileText className="h-5 w-5 text-emerald-600" />
+                  Basic Project Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-gray-500 text-sm flex items-center gap-1.5">
+                        <FiTag className="h-3.5 w-3.5" />
+                        Project ID
+                      </span>
+                      <p className="font-mono font-bold text-gray-800 text-lg">#{selectedProject.id}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-sm flex items-center gap-1.5">
+                        <FiPackage className="h-3.5 w-3.5" />
+                        Category
+                      </span>
+                      <p className="font-semibold text-gray-800">{selectedProject.jenis}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-sm flex items-center gap-1.5">
+                        <FiMail className="h-3.5 w-3.5" />
+                        Submitter Email
+                      </span>
+                      <p className="font-semibold text-gray-800">{selectedProject.email}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-gray-500 text-sm flex items-center gap-1.5">
+                        <FiCalendar className="h-3.5 w-3.5" />
+                        Submission Date
+                      </span>
+                      <p className="font-semibold text-gray-800">{formatDate(selectedProject.tanggal)}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-sm flex items-center gap-1.5">
+                        <FiMapPin className="h-3.5 w-3.5" />
+                        Location
+                      </span>
+                      <p className="font-semibold text-gray-800">{selectedProject.fullData?.location || '-'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-sm flex items-center gap-1.5">
+                        <FiClock className="h-3.5 w-3.5" />
+                        Project Duration
+                      </span>
+                      <p className="font-semibold text-gray-800">
+                        {calculateDuration(selectedProject.fullData?.start_date, selectedProject.fullData?.end_date)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Project Description */}
+              {selectedProject.fullData?.description && (
+                <div className="bg-gray-50 rounded-xl p-5 border-2 border-gray-200">
+                  <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <FiInfo className="h-5 w-5" />
+                    Project Description
+                  </h3>
+                  <p className="text-gray-700 leading-relaxed">
+                    {selectedProject.fullData.description}
                   </p>
                 </div>
+              )}
+
+              {/* Project Timeline */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 rounded-xl p-5 border-2 border-gray-200">
+                  <div className="flex items-start gap-3">
+                    <FiCalendar className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <label className="block text-base font-bold text-gray-900 mb-2">
+                        Project Start Date
+                      </label>
+                      <div className="bg-white border-2 border-gray-300 rounded-xl px-4 py-3">
+                        <p className="text-lg font-bold text-gray-800">
+                          {formatDate(selectedProject.fullData?.start_date)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-5 border-2 border-gray-200">
+                  <div className="flex items-start gap-3">
+                    <FiCalendar className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <label className="block text-base font-bold text-gray-900 mb-2">
+                        Project End Date
+                      </label>
+                      <div className="bg-white border-2 border-gray-300 rounded-xl px-4 py-3">
+                        <p className="text-lg font-bold text-gray-800">
+                          {formatDate(selectedProject.fullData?.end_date)}
+                        </p>
+                      </div>
+                      <p className="text-xs text-gray-700 mt-2">
+                        ⚠️ Certificate will expire on this date
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-          
-          {/* Pagination */}
-          <div className="flex justify-between items-center bg-white rounded-xl shadow-md p-4">
-            <div className="text-sm text-gray-500">
-              Menampilkan {filterNotifikasi(semuaNotifikasi).length} dari {filterNotifikasi(semuaNotifikasi).length} notifikasi
+
+              {/* Certificate Details */}
+              <div className="bg-gradient-to-r from-slate-50 to-gray-50 rounded-xl p-6 border-2 border-slate-300">
+                <h3 className="font-bold text-lg mb-5 text-gray-800 flex items-center gap-2">
+                  <FiPackage className="h-5 w-5 text-gray-600" />
+                  Certificate Details (From User Submission)
+                </h3>
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-5">
+                    <div className="flex items-start gap-3">
+                      <FiPackage className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <label className="block text-sm font-bold text-gray-800 mb-2">
+                          Certificate Volume
+                        </label>
+                        <div className="bg-white border-2 border-gray-300 rounded-xl px-4 py-3">
+                          <p className="text-3xl font-bold text-gray-1000">
+                            {selectedProject.fullData?.est_volume?.toLocaleString('en-US') || 0}
+                          </p>
+                          <p className="text-sm text-gray-700 mt-1">tCO₂e</p>
+                        </div>
+                        <p className="text-xs text-gray-700 mt-2 flex items-center gap-1">
+                          <FiInfo className="h-3 w-3" />
+                          Estimated emission reduction
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-5">
+                    <div className="flex items-start gap-3">
+                      <FiDollarSign className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <label className="block text-sm font-bold text-gray-800 mb-2">
+                          Price per tCO₂e
+                        </label>
+                        <div className="bg-white border-2 border-gray-300 rounded-xl px-4 py-3">
+                          <p className="text-2xl font-bold text-gray-1000">
+                            {formatCurrency(selectedProject.fullData?.price_per_unit || 0)}
+                          </p>
+                          <p className="text-sm text-gray-700 mt-1">per unit</p>
+                        </div>
+                        <p className="text-xs text-gray-700 mt-2 flex items-center gap-1">
+                          <FiInfo className="h-3 w-3" />
+                          Price submitted by user
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Total Value */}
+              {selectedProject.fullData?.est_volume && selectedProject.fullData?.price_per_unit && (
+                <div className="bg-gray rounded-xl p-6 border-2 border-gray-300">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="font-bold text-gray-700 text-xl">Total Certificate Value:</span>
+                    <span className="text-4xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 text-transparent bg-clip-text">
+                      {formatCurrency(selectedProject.fullData.est_volume * selectedProject.fullData.price_per_unit)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 text-sm bg-white rounded-lg p-4">
+                    <div>
+                      <span className="text-gray-500">Volume:</span>
+                      <p className="font-bold text-gray-800">{selectedProject.fullData.est_volume.toLocaleString('en-US')} tCO₂e</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Price per unit:</span>
+                      <p className="font-bold text-gray-800">{formatCurrency(selectedProject.fullData.price_per_unit)}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Validity period:</span>
+                      <p className="font-bold text-gray-800">
+                        {calculateDuration(new Date(), selectedProject.fullData.end_date)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Warning */}
+              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-5 flex items-start gap-3">
+                <FiAlertCircle className="h-6 w-6 text-yellow-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-yellow-800">
+                  <p className="font-bold mb-3 text-base">⚠️ Important - Please Note:</p>
+                  <ul className="list-disc list-inside space-y-2">
+                    <li>All data (volume, price, date) come from the user's submission and **cannot be changed**</li>
+                    <li>The certificate will automatically **expire on the project end date** ({formatDate(selectedProject.fullData?.end_date)})</li>
+                    <li>This validation will issue the certificate **permanently on the blockchain**</li>
+                    <li>Issued certificates **cannot be revoked**</li>
+                    <li>Ensure all data has been **carefully verified** before validating</li>
+                  </ul>
+                </div>
+              </div>
             </div>
-            <div className="flex space-x-2">
-              <button className="px-3 py-2 border border-gray-300 rounded-md text-gray-500 hover:bg-gray-50" disabled>
-                <i className="fas fa-chevron-left"></i>
+
+            {/* Action Buttons */}
+            <div className="border-t p-6 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowProjectModal(false);
+                  setSelectedProject(null);
+                }}
+                disabled={isLoading}
+                className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
+              >
+                Cancel
               </button>
-              <button className="px-3 py-2 bg-[#1D3C34] text-white rounded-md">1</button>
-              <button className="px-3 py-2 border border-gray-300 rounded-md text-gray-500 hover:bg-gray-50" disabled>
-                <i className="fas fa-chevron-right"></i>
+              <button
+                onClick={handleRejectProject}
+                disabled={isLoading}
+                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <FiXCircle className="h-4 w-4" />
+                Reject Project
+              </button>
+              <button
+                onClick={handleValidateProject}
+                disabled={isLoading}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-600 to-cyan-600 text-white rounded-xl hover:shadow-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <FiLoader className="animate-spin h-4 w-4" />
+                    Processing Validation...
+                  </>
+                ) : (
+                  <>
+                    <FiCheckCircle className="h-4 w-4" />
+                    Approve Project
+                  </>
+                )}
               </button>
             </div>
           </div>
         </div>
-      </div>
-      
-      {/* Modal untuk minta info tambahan - bisa ditambahkan di sini */}
-      {/* Modal akan muncul ketika tombol "Minta Info" ditekan */}
-      {/* 
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold text-gray-800">Minta Informasi Tambahan</h3>
-            <button className="text-gray-500 hover:text-gray-700">
-              <i className="fas fa-times"></i>
-            </button>
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-medium mb-2">Pesan</label>
-            <textarea
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-              rows="4"
-              placeholder="Masukkan pesan untuk pemohon..."
-            ></textarea>
-          </div>
-          <div className="flex justify-end space-x-3">
-            <button className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
-              Batal
-            </button>
-            <button className="px-4 py-2 bg-[#1D3C34] text-white rounded-md hover:bg-green-700">
-              Kirim Permintaan
-            </button>
-          </div>
-        </div>
-      </div>
-      */}
+      )}
     </div>
   );
 };
 
-export default NotifikasiRegulator;
+export default RegulatorNotification;

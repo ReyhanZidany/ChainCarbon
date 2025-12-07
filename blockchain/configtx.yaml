@@ -1,0 +1,165 @@
+# configtx.yaml - for Carbon Market (Seller / Buyer / Regulator)
+
+Organizations:
+
+    - &OrdererOrg
+        Name: OrdererMSP
+        ID: OrdererMSP
+        MSPDir: organizations/ordererOrganizations/carbon.com/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('OrdererMSP.member')"
+            Writers:
+                Type: Signature
+                Rule: "OR('OrdererMSP.member')"
+            Admins:
+                Type: Signature
+                Rule: "OR('OrdererMSP.admin')"
+
+    - &SellerMSP
+        Name: SellerMSP
+        ID: SellerMSP
+        MSPDir: organizations/peerOrganizations/seller.carbon.com/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('SellerMSP.member')"
+            Writers:
+                Type: Signature
+                Rule: "OR('SellerMSP.member')"
+            Admins:
+                Type: Signature
+                Rule: "OR('SellerMSP.admin')"
+        AnchorPeers:
+            - Host: peer0.seller.carbon.com
+              Port: 7051
+
+    - &BuyerMSP
+        Name: BuyerMSP
+        ID: BuyerMSP
+        MSPDir: organizations/peerOrganizations/buyer.carbon.com/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('BuyerMSP.member')"
+            Writers:
+                Type: Signature
+                Rule: "OR('BuyerMSP.member')"
+            Admins:
+                Type: Signature
+                Rule: "OR('BuyerMSP.admin')"
+        AnchorPeers:
+            - Host: peer0.buyer.carbon.com
+              Port: 9051
+
+    - &RegulatorMSP
+        Name: RegulatorMSP
+        ID: RegulatorMSP
+        MSPDir: organizations/peerOrganizations/regulator.carbon.com/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('RegulatorMSP.member')"
+            Writers:
+                Type: Signature
+                Rule: "OR('RegulatorMSP.member')"
+            Admins:
+                Type: Signature
+                Rule: "OR('RegulatorMSP.admin')"
+        AnchorPeers:
+            - Host: peer0.regulator.carbon.com
+              Port: 11051
+
+Capabilities:
+    Channel: &ChannelCapabilities
+        V2_0: true
+    Orderer: &OrdererCapabilities
+        V2_0: true
+    Application: &ApplicationCapabilities
+        V2_0: true
+
+Application: &ApplicationDefaults
+    Organizations:
+    Policies:
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+        Endorsement:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Endorsers"
+    Capabilities:
+        <<: *ApplicationCapabilities
+
+Orderer: &OrdererDefaults
+    OrdererType: solo
+    Addresses:
+        - orderer.carbon.com:7050
+    BatchTimeout: 2s
+    BatchSize:
+        MaxMessageCount: 10
+        AbsoluteMaxBytes: 99 MB
+        PreferredMaxBytes: 512 KB
+    Policies:
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+        BlockValidation:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+    Capabilities:
+        <<: *OrdererCapabilities
+    Organizations:
+        - *OrdererOrg
+
+Channel: &ChannelDefaults
+    Policies:
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+    Capabilities:
+        <<: *ChannelCapabilities
+
+Profiles:
+
+    CarbonOrdererGenesis:
+        <<: *ChannelDefaults
+        Orderer:
+            <<: *OrdererDefaults
+            Organizations:
+                - *OrdererOrg
+        Consortiums:
+            CarbonConsortium:
+                Organizations:
+                    - *SellerMSP
+                    - *BuyerMSP
+                    - *RegulatorMSP
+
+    CarbonChannel:
+        <<: *ChannelDefaults
+        Consortium: CarbonConsortium
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - *SellerMSP
+                - *BuyerMSP
+                - *RegulatorMSP
+

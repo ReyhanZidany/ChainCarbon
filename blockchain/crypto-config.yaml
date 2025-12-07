@@ -1,0 +1,49 @@
+# ---------------------------------------------------------------------------
+# "crypto-config.yaml"
+# ---------------------------------------------------------------------------
+
+# Konfigurasi untuk Orderer
+OrdererOrgs:
+  - Name: Orderer
+    Domain: carbon.com
+    EnableNodeOUs: true
+    Specs:
+      - Hostname: orderer
+        SANS:
+          - localhost
+
+# Konfigurasi untuk Peer Orgs
+PeerOrgs:
+  # Organisasi 1: Seller
+  - Name: Seller
+    Domain: seller.carbon.com
+    EnableNodeOUs: true
+    Template:
+      Count: 2
+      SANS:
+        - localhost
+    Users:
+      Count: 1
+
+  # Organisasi 2: Buyer
+  - Name: Buyer
+    Domain: buyer.carbon.com
+    EnableNodeOUs: true
+    Template:
+      Count: 2
+      SANS:
+        - localhost
+    Users:
+      Count: 1
+
+  # Organisasi 3: Regulator
+  - Name: Regulator
+    Domain: regulator.carbon.com
+    EnableNodeOUs: true
+    Template:
+      Count: 2
+      SANS:
+        - localhost
+    Users:
+      Count: 1
+

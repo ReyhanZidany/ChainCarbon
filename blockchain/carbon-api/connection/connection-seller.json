@@ -1,0 +1,56 @@
+{
+  "name": "carbon-network",
+  "version": "1.0.0",
+  "client": {
+    "organization": "Seller",
+    "connection": {
+      "timeout": {
+        "peer": { "endorser": "15000" },
+        "orderer": "15000"
+      }
+    }
+  },
+  "organizations": {
+    "Seller": {
+      "mspid": "SellerMSP",
+      "peers": [ 
+        "peer0.seller.carbon.com",
+        "peer1.seller.carbon.com"
+      ]
+    }
+  },
+  "peers": {
+    "peer0.seller.carbon.com": {
+      "url": "grpcs://localhost:7051",
+      "tlsCACerts": {
+        "path": "/home/reyhan-zidany/chaincarbon/blockchain/organizations/peerOrganizations/seller.carbon.com/peers/peer0.seller.carbon.com/tls/ca.crt"
+      },
+      "grpcOptions": {
+        "ssl-target-name-override": "peer0.seller.carbon.com",
+        "grpc.keepalive_time_ms": 600000
+      }
+    },
+    "peer1.seller.carbon.com": { 
+      "url": "grpcs://localhost:8051",
+      "tlsCACerts": {
+        "path": "/home/reyhan-zidany/chaincarbon/blockchain/organizations/peerOrganizations/seller.carbon.com/peers/peer1.seller.carbon.com/tls/ca.crt"
+      },
+      "grpcOptions": {
+        "ssl-target-name-override": "peer1.seller.carbon.com",
+        "grpc.keepalive_time_ms": 600000
+      }
+    }
+  },
+  "orderers": {
+    "orderer.carbon.com": {
+      "url": "grpcs://localhost:7050",
+      "tlsCACerts": {
+        "path": "/home/reyhan-zidany/chaincarbon/blockchain/organizations/ordererOrganizations/carbon.com/orderers/orderer.carbon.com/tls/ca.crt"
+      },
+      "grpcOptions": {
+        "ssl-target-name-override": "orderer.carbon.com",
+        "grpc.keepalive_time_ms": 600000
+      }
+    }
+  }
+}

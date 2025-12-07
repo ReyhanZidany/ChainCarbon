@@ -1,0 +1,2 @@
+Installed chaincodes on peer:
+Package ID: carboncc_1.0:5ffa248774fbd9bda8b7d0aeaa5483d37a3f99e4914421e59bb37211792a772c, Label: carboncc_1.0

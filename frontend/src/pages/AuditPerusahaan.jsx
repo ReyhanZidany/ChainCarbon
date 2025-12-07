@@ -1,416 +1,669 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import '@fortawesome/fontawesome-free/css/all.min.css';
+// frontend/src/pages/AuditCompanies.jsx
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import API from "../api/axios"; 
+import {
+  FiGrid,
+  FiSearch,
+  FiBarChart2,
+  FiBell,
+  FiSettings,
+  FiLogOut,
+  FiFilter,
+  FiCalendar,
+  FiCheckCircle,
+  FiClock,
+  FiUsers,
+  FiFileText,
+  FiAlertCircle,
+  FiTrendingUp,
+  FiEye,
+  FiEdit,
+} from "react-icons/fi";
+import logo from "../assets/chaincarbon_logo_transparent.png";
 
-const AuditPerusahaan = () => {
-  const [isSidebarExpanded, setSidebarExpanded] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState('semua');
-  const [searchQuery, setSearchQuery] = useState('');
+const AuditCompanies = () => {
+  const [activeMenu] = useState("audit");
+  const [selectedFilter, setSelectedFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [companies, setCompanies] = useState([]);
+  const [upcomingSchedule, setUpcomingSchedule] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalCompanies: 0,
+    auditedCompanies: 0,
+    notAuditedCompanies: 0,
+  });
   const navigate = useNavigate();
 
-  // Data perusahaan yang tersedia untuk diaudit
-  const [perusahaan, setPerusahaan] = useState([
-    { 
-      id: 1, 
-      nama: "Perusahaan A", 
-      sektor: "Energi", 
-      status: "Aktif",
-      tanggalRegistrasi: "2024-01-12",
-      jumlahProyek: 8,
-      kreditKarbon: 500,
-      lastAudit: "2024-03-15",
-      risiko: "Rendah"
-    },
-    { 
-      id: 2, 
-      nama: "Perusahaan B", 
-      sektor: "Manufaktur", 
-      status: "Aktif",
-      tanggalRegistrasi: "2023-09-24",
-      jumlahProyek: 12,
-      kreditKarbon: 750,
-      lastAudit: "2024-02-20",
-      risiko: "Sedang"
-    },
-    { 
-      id: 3, 
-      nama: "Perusahaan C", 
-      sektor: "Teknologi", 
-      status: "Non-Aktif",
-      tanggalRegistrasi: "2023-11-03",
-      jumlahProyek: 3,
-      kreditKarbon: 120,
-      lastAudit: "2023-12-10",
-      risiko: "Tinggi"
-    },
-    { 
-      id: 4, 
-      nama: "Perusahaan D", 
-      sektor: "Agrikultur", 
-      status: "Aktif",
-      tanggalRegistrasi: "2023-08-15",
-      jumlahProyek: 15,
-      kreditKarbon: 1200,
-      lastAudit: "2024-01-08",
-      risiko: "Rendah"
-    },
-    { 
-      id: 5, 
-      nama: "Perusahaan E", 
-      sektor: "Energi", 
-      status: "Aktif",
-      tanggalRegistrasi: "2024-02-28",
-      jumlahProyek: 5,
-      kreditKarbon: 320,
-      lastAudit: "Belum Diaudit",
-      risiko: "Sedang"
-    }
-  ]);
-
-  // Menu sidebar - sama dengan dashboard
   const sidebarMenu = [
-    { 
-      id: 'dashboard', 
-      icon: 'fas fa-tachometer-alt', 
-      text: 'Dashboard', 
-      link: '/regulator-dashboard' 
-    },
-    { 
-      id: 'audit', 
-      icon: 'fas fa-search', 
-      text: 'Audit & Inspeksi', 
-      link: '/regulator-dashboard/audit',
-      active: true
-    },
-    { 
-      id: 'laporan', 
-      icon: 'fas fa-chart-line', 
-      text: 'Laporan & Analisis', 
-      link: '/regulator-dashboard/laporan' 
-    },
-    { 
-      id: 'notifikasi', 
-      icon: 'fas fa-bell', 
-      text: 'Notifikasi', 
-      link: '/regulator-dashboard/notifikasi' 
-    },
-    { 
-      id: 'pengaturan', 
-      icon: 'fas fa-cog', 
-      text: 'Pengaturan', 
-      link: '/regulator-dashboard/pengaturan' 
-    }
+    { id: "dashboard", icon: FiGrid, text: "Dashboard", link: "/regulator" },
+    { id: "audit", icon: FiSearch, text: "Audit & Inspection", link: "/regulator/audit" },
+    { id: "reports", icon: FiBarChart2, text: "Reports & Analytics", link: "/regulator/laporan" },
+    { id: "notifications", icon: FiBell, text: "Notifications", link: "/regulator/notifikasi" },
+    { id: "settings", icon: FiSettings, text: "Settings", link: "/regulator/pengaturan" },
   ];
 
-  // Filter perusahaan berdasarkan status dan query pencarian
-  const filteredPerusahaan = perusahaan.filter(p => {
-    const matchStatus = selectedFilter === 'semua' || 
-                      (selectedFilter === 'aktif' && p.status === 'Aktif') ||
-                      (selectedFilter === 'nonaktif' && p.status === 'Non-Aktif') ||
-                      (selectedFilter === 'belumdiaudit' && p.lastAudit === 'Belum Diaudit');
+  const [pendingNotifications, setPendingNotifications] = useState({
+    accounts: 0,
+    projects: 0,
+    retirements: 0
+  });
+
+  useEffect(() => {
+    // ✅ Force refresh on mount
+    const fetchData = async () => {
+      try {
+        console.log("🔄 Fetching companies and audits...");
+  
+        // ✅ Fetch companies with timestamp to prevent cache
+        const companiesRes = await API.get(`/regulator/companies?t=${new Date().getTime()}`);
+        const companiesData = companiesRes.data;
+  
+        // ✅ Fetch audits with timestamp to prevent cache
+        const auditsRes = await API.get(`/regulator/audits?t=${new Date().getTime()}`);
+        const auditsData = auditsRes.data;
+  
+        console.log("📊 Companies fetched:", companiesData.success ? companiesData.data.length : 0);
+        console.log("📊 Audits fetched:", auditsData.success ? auditsData.data.length : 0);
+  
+        if (companiesData.success) {
+          // ✅ Create audit map (latest audit per company)
+          const auditMap = {};
+          if (auditsData.success && auditsData.data.length > 0) {
+            console.log("📋 Processing audits...");
+            
+            auditsData.data.forEach((audit) => {
+              console.log(`   Audit for company_id ${audit.company_id}:`, {
+                audit_date: audit.audit_date,
+                score: audit.overall_score,
+                risk: audit.risk_level,
+                next_date: audit.next_audit_date
+              });
+              
+              // Get latest audit for each company based on audit_date
+              if (!auditMap[audit.company_id] || 
+                  new Date(audit.audit_date) > new Date(auditMap[audit.company_id].audit_date)) {
+                auditMap[audit.company_id] = audit;
+              }
+            });
+            
+            console.log("✅ Audit map created:", Object.keys(auditMap).length, "companies");
+          } else {
+            console.log("⚠️ No audits found");
+          }
+  
+          // ✅ Transform companies with audit data
+          const transformedData = companiesData.data.map((company) => {
+            const latestAudit = auditMap[company.id];
+  
+            const companyData = {
+              id: company.id,
+              companyId: company.company_id,
+              name: company.company,
+              email: company.email,
+              sector: company.type,
+              status: company.is_validated === 1 ? "Active" : "Inactive",
+              registrationDate: new Date(company.created_at).toLocaleDateString("en-US"),
+              totalProjects: company.total_projects || 0,
+              carbonCredits: company.total_carbon_credits || 0,
+              
+              // ✅ Audit data from database
+              lastAuditDate: latestAudit 
+                ? new Date(latestAudit.audit_date).toLocaleDateString("en-US")
+                : null,
+              lastAuditScore: latestAudit?.overall_score || null,
+              lastAuditRating: latestAudit?.overall_rating || null,
+              lastAuditStatus: latestAudit?.status || null,
+              auditor: latestAudit?.auditor || null,
+              nextAuditDate: latestAudit?.next_audit_date 
+                ? new Date(latestAudit.next_audit_date).toLocaleDateString("en-US")
+                : null,
+              riskLevel: latestAudit?.risk_level || null,
+              
+              // ✅ Determine risk from audit score
+              risk: determineRisk(latestAudit?.overall_score, latestAudit?.risk_level),
+              
+              website: company.website,
+              province: company.province,
+              city: company.city,
+            };
+  
+            if (latestAudit) {
+              console.log(`✅ Company ${company.company} has audit:`, {
+                date: companyData.lastAuditDate,
+                score: companyData.lastAuditScore,
+                risk: companyData.risk,
+                next: companyData.nextAuditDate
+              });
+            }
+  
+            return companyData;
+          });
+  
+          console.log("✅ Transformed companies:", transformedData.length);
+  
+          setCompanies(transformedData);
+  
+          // ✅ Calculate stats
+          const auditedCompanies = transformedData.filter(c => c.lastAuditDate !== null);
+          const newStats = {
+            totalCompanies: transformedData.length,
+            auditedCompanies: auditedCompanies.length,
+            notAuditedCompanies: transformedData.length - auditedCompanies.length,
+          };
+          
+          console.log("📊 Stats:", newStats);
+          setStats(newStats);
+  
+          // ✅ Generate upcoming schedule from next_audit_date
+          generateUpcomingSchedule(transformedData);
+        }
+      } catch (error) {
+        console.error("❌ Error fetching data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+  
+    fetchData();
+
+    // ✅ Fetch pending notifications
+    const fetchPendingNotifications = async () => {
+      try {
+        const accountsRes = await API.get("/regulator/pending-users");
+        const accountsData = accountsRes.data;
+        
+        const projectsRes = await API.get("/projects/regulator/pending-projects");
+        const projectsData = projectsRes.data;
+        
+        setPendingNotifications({
+          accounts: accountsData.success ? accountsData.data.length : 0,
+          projects: projectsData.success ? projectsData.data.length : 0,
+          retirements: 0
+        });
+      } catch (error) {
+        console.error("❌ Error fetching pending notifications:", error);
+      }
+    };
     
-    const matchSearch = p.nama.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                       p.sektor.toLowerCase().includes(searchQuery.toLowerCase());
+    fetchPendingNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  
+  // ✅ Determine risk based on overall_score or risk_level from database
+  const determineRisk = (overallScore, riskLevel) => {
+    // Prioritize risk_level from database if exists
+    if (riskLevel) return riskLevel;
     
+    // Otherwise calculate from score
+    if (!overallScore) return "Not Assessed";
+    if (overallScore >= 85) return "Low";
+    if (overallScore >= 70) return "Medium";
+    return "High";
+  };
+
+  // ✅ Generate upcoming schedule from next_audit_date in database
+  const generateUpcomingSchedule = (companiesData) => {
+    const companiesWithNextAudit = companiesData
+      .filter(c => c.nextAuditDate !== null)
+      .sort((a, b) => {
+        const dateA = new Date(a.nextAuditDate);
+        const dateB = new Date(b.nextAuditDate);
+        return dateA - dateB;
+      })
+      .slice(0, 5);
+
+    const schedule = companiesWithNextAudit.map((company) => ({
+      id: company.id,
+      company: company.name,
+      date: company.nextAuditDate,
+      auditor: company.auditor || "Admin Regulator",
+      risk: company.risk,
+      status: getAuditStatus(company.nextAuditDate),
+    }));
+
+    setUpcomingSchedule(schedule);
+  };
+
+  // ✅ Determine audit status based on next_audit_date
+  const getAuditStatus = (nextAuditDate) => {
+    if (!nextAuditDate) return "Not Scheduled";
+    
+    const nextDate = new Date(nextAuditDate);
+    const today = new Date();
+    const daysUntil = Math.ceil((nextDate - today) / (1000 * 60 * 60 * 24));
+
+    if (daysUntil < 0) return "Overdue";
+    if (daysUntil <= 7) return "Upcoming";
+    if (daysUntil <= 30) return "Scheduled";
+    return "Planned";
+  };
+
+  const totalNotifications = 
+    pendingNotifications.accounts + 
+    pendingNotifications.projects + 
+    pendingNotifications.retirements;
+
+  const filteredCompanies = companies.filter((company) => {
+    const matchStatus =
+      selectedFilter === "all" ||
+      (selectedFilter === "active" && company.status === "Active") ||
+      (selectedFilter === "inactive" && company.status === "Inactive") ||
+      (selectedFilter === "notaudited" && company.lastAuditDate === null);
+
+    const matchSearch =
+      company.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      company.sector.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      company.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      company.companyId.toLowerCase().includes(searchQuery.toLowerCase());
+
     return matchStatus && matchSearch;
   });
 
-  // Fungsi untuk memulai audit pada perusahaan yang dipilih
-  const handleStartAudit = (id) => {
-    navigate(`/regulator-dashboard/audit/${id}/detail`);
+  const handleStartAudit = (company) => {
+    navigate(`/regulator/audit/${company.id}`, { state: { company } });
   };
 
-  return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar - sama dengan dashboard */}
-      <div 
-        className={`bg-[#1D3C34] text-white transition-all duration-300 ease-in-out ${isSidebarExpanded ? 'w-64' : 'w-20'} h-full`} 
-        onMouseEnter={() => setSidebarExpanded(true)}
-        onMouseLeave={() => setSidebarExpanded(false)}
-      >
-        {/* Logo dan Judul */}
-        <div className="flex items-center justify-center py-6 border-b border-green-700">
-          <i className="fas fa-leaf text-2xl text-green-400"></i>
-          <h2 className={`ml-3 font-bold text-xl transition-opacity duration-300 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-            PT LEDGRON
-          </h2>
-        </div>
-
-        {/* Menu Items */}
-        <div className="mt-8">
-          {sidebarMenu.map((item) => (
-            <Link to={item.link} key={item.id}>
-              <div className={`flex items-center px-6 py-4 hover:bg-green-800 transition duration-200 cursor-pointer ${item.active ? 'bg-green-800' : ''}`}>
-                <div className={`flex items-center justify-center ${isSidebarExpanded ? 'w-8' : 'w-full'}`}>
-                  <i className={`${item.icon} text-xl text-green-300`}></i>
-                </div>
-                <span className={`ml-4 transition-opacity duration-300 whitespace-nowrap ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-                  {item.text}
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
-
-        {/* Logout at bottom */}
-        <div className="absolute bottom-0 w-full border-t border-green-700">
-          <Link to="/logout">
-            <div className="flex items-center px-6 py-4 hover:bg-green-800 transition duration-200 cursor-pointer">
-              <div className={`flex items-center justify-center ${isSidebarExpanded ? 'w-8' : 'w-full'}`}>
-                <i className="fas fa-sign-out-alt text-xl text-green-300"></i>
-              </div>
-              <span className={`ml-4 transition-opacity duration-300 ${isSidebarExpanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-                Keluar
-              </span>
-            </div>
-          </Link>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-emerald-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-lg font-medium">Loading audit data...</p>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+      {/* Sidebar - sama seperti sebelumnya */}
+      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center space-x-3">
+            <img src={logo} alt="ChainCarbon" className="w-10 h-10" />
+            <div>
+              <h1 className="text-xl font-bold text-gray-800">ChainCarbon</h1>
+              <p className="text-xs text-gray-500">Regulator Portal</p>
+            </div>
+          </div>
+        </div>
+
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {sidebarMenu.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeMenu === item.id;
+            return (
+              <Link
+                key={item.id}
+                to={item.link}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                  isActive
+                    ? "bg-gradient-to-r from-emerald-50 to-cyan-50 text-emerald-700 font-semibold shadow-sm"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-emerald-600"
+                }`}
+              >
+                <Icon className={`w-5 h-5 ${isActive ? "text-emerald-600" : "text-gray-500"}`} />
+                <span className="text-sm">{item.text}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="p-4 border-t border-gray-200">
+          <button
+            onClick={() => {
+              localStorage.removeItem("token");
+              localStorage.removeItem("user");
+              navigate("/");
+            }}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all duration-200 w-full"
+          >
+            <FiLogOut className="w-5 h-5" />
+            <span className="text-sm font-medium">Log Out</span>
+          </button>
+        </div>
+      </aside>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-white shadow-md p-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <Link to="/regulator-dashboard" className="text-gray-500 hover:text-[#1D3C34] mr-2">
-                <i className="fas fa-arrow-left"></i>
-              </Link>
-              <h1 className="text-2xl font-bold text-[#1D3C34]">Audit Perusahaan</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <i className="fas fa-bell text-gray-600 cursor-pointer hover:text-[#1D3C34] transition"></i>
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">3</span>
+        <header className="bg-white border-b border-gray-200 px-8 py-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Company Audits</h1>
+              <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                <Link to="/regulator" className="hover:text-emerald-600 transition-colors flex items-center gap-1">
+                  <FiGrid className="inline" /> Dashboard
+                </Link>
+                <span>/</span>
+                <span className="text-gray-700 font-medium">Company Audits</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-[#1D3C34] rounded-full flex items-center justify-center text-white">
-                  <i className="fas fa-user"></i>
+            </div>
+            <div className="flex items-center space-x-6">
+              <Link to="/regulator/notifikasi" className="relative">
+                <FiBell className="w-6 h-6 text-gray-500 cursor-pointer hover:text-emerald-600 transition" />
+                {totalNotifications > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
+                    {totalNotifications}
+                  </span>
+                )}
+              </Link>
+              <div className="w-px h-8 bg-gray-200" />
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-full flex items-center justify-center text-white shadow-lg">
+                  <span className="font-bold text-base">AR</span>
                 </div>
-                <span className="font-medium">Admin</span>
+                <div>
+                  <p className="font-semibold text-gray-800 text-sm">Admin Regulator</p>
+                  <p className="text-xs text-gray-400">System Supervisor</p>
+                </div>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Konten Audit */}
-        <div className="p-6">
-          {/* Breadcrumb Navigation */}
-          <nav className="mb-6">
-            <ol className="flex text-sm">
-              <li className="flex items-center">
-                <Link to="/regulator-dashboard" className="text-blue-600 hover:text-blue-800">Dashboard</Link>
-                <i className="fas fa-chevron-right text-gray-400 mx-2"></i>
-              </li>
-              <li className="text-gray-700">Audit Perusahaan</li>
-            </ol>
-          </nav>
-
-          {/* Judul Halaman dan Deskripsi */}
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold text-gray-800">Audit Perusahaan</h2>
-            <p className="text-gray-600 mt-2">Lakukan audit dan inspeksi terhadap perusahaan penjual dan pembeli kredit karbon</p>
-          </div>
-
-          {/* Filter dan Pencarian */}
-          <div className="bg-white p-6 rounded-xl shadow-md mb-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <span className="text-gray-700 font-medium">Filter:</span>
-                  <select 
-                    className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                    value={selectedFilter}
-                    onChange={(e) => setSelectedFilter(e.target.value)}
-                  >
-                    <option value="semua">Semua</option>
-                    <option value="aktif">Aktif</option>
-                    <option value="nonaktif">Non-Aktif</option>
-                    <option value="belumdiaudit">Belum Diaudit</option>
-                  </select>
+        {/* Stats Section - ✅ Updated dengan data real */}
+        <main className="flex-1 overflow-y-auto p-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-500 text-sm font-medium mb-1">Total Companies</p>
+                  <h3 className="text-3xl font-bold text-gray-800">{stats.totalCompanies}</h3>
+                  <p className="text-xs text-blue-600 mt-2 flex items-center">
+                    <FiTrendingUp className="mr-1" />
+                    Registered in system
+                  </p>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-gray-700 font-medium">Periode:</span>
-                  <select className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500">
-                    <option value="semua">Semua</option>
-                    <option value="tahunini">Tahun Ini</option>
-                    <option value="bulanlalu">Bulan Lalu</option>
-                    <option value="6bulanlalu">6 Bulan Terakhir</option>
-                  </select>
+                <div className="bg-gradient-to-br from-blue-400 to-blue-500 p-4 rounded-xl shadow-sm">
+                  <FiFileText className="text-white text-2xl" />
                 </div>
               </div>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  placeholder="Cari perusahaan..."
-                  className="border border-gray-300 rounded-md px-4 py-2 pl-10 w-full md:w-64 focus:outline-none focus:ring-2 focus:ring-green-500"
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-500 text-sm font-medium mb-1">Audited</p>
+                  <h3 className="text-3xl font-bold text-gray-800">{stats.auditedCompanies}</h3>
+                  <p className="text-xs text-green-600 mt-2 flex items-center">
+                    <FiCheckCircle className="mr-1" />
+                    Audit completed
+                  </p>
+                </div>
+                <div className="bg-gradient-to-br from-green-400 to-green-500 p-4 rounded-xl shadow-sm">
+                  <FiCheckCircle className="text-white text-2xl" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-lg transition">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-500 text-sm font-medium mb-1">Not Audited</p>
+                  <h3 className="text-3xl font-bold text-gray-800">{stats.notAuditedCompanies}</h3>
+                  <p className="text-xs text-yellow-600 mt-2 flex items-center">
+                    <FiClock className="mr-1" />
+                    Requires audit
+                  </p>
+                </div>
+                <div className="bg-gradient-to-br from-yellow-400 to-yellow-500 p-4 rounded-xl shadow-sm">
+                  <FiAlertCircle className="text-white text-2xl" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="flex items-center space-x-4">
+                <FiFilter className="text-gray-400" />
+                <select
+                  className="border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                  value={selectedFilter}
+                  onChange={(e) => setSelectedFilter(e.target.value)}
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="notaudited">Not Audited Yet</option>
+                </select>
+              </div>
+              <div className="relative flex-1 max-w-md">
+                <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <input
+                  type="text"
+                  placeholder="Search company..."
+                  className="border-2 border-gray-200 rounded-xl px-4 py-2.5 pl-12 w-full focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
-                <i className="fas fa-search absolute left-3 top-3 text-gray-400"></i>
               </div>
             </div>
           </div>
 
-          {/* Daftar Perusahaan untuk Audit */}
-          <div className="bg-white p-6 rounded-xl shadow-md mb-6">
+          {/* Companies Table - ✅ Updated dengan data audit real */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2">
+                <FiUsers className="text-emerald-600" />
+                Company Audit List
+              </h3>
+              <span className="text-sm text-gray-500">
+                Showing {filteredCompanies.length} of {companies.length} companies
+              </span>
+            </div>
             <div className="overflow-x-auto">
-              <table className="w-full table-auto border-collapse">
+              <table className="w-full">
                 <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Perusahaan</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sektor</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jumlah Proyek</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kredit Karbon</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Audit Terakhir</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tingkat Risiko</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Company</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Sector</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Status</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Last Audit</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Score</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Risk</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Projects</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredPerusahaan.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-4 whitespace-nowrap font-medium">{p.nama}</td>
-                      <td className="px-4 py-4 whitespace-nowrap">{p.sektor}</td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          p.status === 'Aktif' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">{p.jumlahProyek}</td>
-                      <td className="px-4 py-4 whitespace-nowrap">{p.kreditKarbon} Ton</td>
-                      <td className="px-4 py-4 whitespace-nowrap">{p.lastAudit}</td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          p.risiko === 'Rendah' 
-                            ? 'bg-green-100 text-green-800' 
-                            : p.risiko === 'Sedang'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-red-100 text-red-800'
-                        }`}>
-                          {p.risiko}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <button 
-                          onClick={() => handleStartAudit(p.id)}
-                          className="bg-[#1D3C34] text-white px-3 py-1 rounded hover:bg-green-800 transition duration-200"
-                        >
-                          Mulai Audit
-                        </button>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredCompanies.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
+                        No companies found
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredCompanies.map((company) => (
+                      <tr key={company.id} className="hover:bg-gray-50 transition">
+                        <td className="px-4 py-4">
+                          <div>
+                            <p className="font-semibold text-gray-800">{company.name}</p>
+                            <p className="text-xs text-gray-500 font-mono">{company.companyId}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-lg text-xs font-medium">
+                            {company.sector}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span
+                            className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                              company.status === "Active"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-red-100 text-red-700"
+                            }`}
+                          >
+                            {company.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          {company.lastAuditDate ? (
+                            <div className="text-sm">
+                              <div className="text-gray-700 font-medium">{company.lastAuditDate}</div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                by {company.auditor}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-sm italic">Not audited yet</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          {company.lastAuditScore ? (
+                            <div>
+                              <span
+                                className={`px-3 py-1.5 rounded-lg font-bold text-lg ${
+                                  company.lastAuditScore >= 85
+                                    ? "bg-green-100 text-green-600"
+                                    : company.lastAuditScore >= 70
+                                    ? "bg-yellow-100 text-yellow-600"
+                                    : "bg-red-100 text-red-600"
+                                }`}
+                              >
+                                {company.lastAuditScore}
+                              </span>
+                              <div className="text-xs text-gray-500 mt-1">{company.lastAuditRating}</div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-sm">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span
+                            className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                              company.risk === "Low"
+                                ? "bg-green-100 text-green-700"
+                                : company.risk === "Medium"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : company.risk === "High"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-gray-100 text-gray-700"
+                            }`}
+                          >
+                            {company.risk}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <div>
+                            <span className="font-semibold text-gray-700">{company.totalProjects}</span>
+                            <div className="text-xs text-gray-500">
+                              {company.carbonCredits.toLocaleString("en-US")} tCO₂e
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <button
+                            onClick={() => handleStartAudit(company)}
+                            className="bg-gradient-to-r from-emerald-500 to-cyan-600 text-white px-4 py-2 rounded-lg shadow hover:shadow-lg transition-all transform hover:scale-105 text-sm font-semibold flex items-center gap-2 mx-auto"
+                          >
+                            {company.lastAuditDate ? (
+                              <>
+                                <FiEdit className="h-4 w-4" />
+                                Re-Audit
+                              </>
+                            ) : (
+                              <>
+                                <FiEye className="h-4 w-4" />
+                                Start Audit
+                              </>
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
-            {filteredPerusahaan.length === 0 && (
-              <div className="text-center py-8">
-                <div className="text-gray-400 mb-2">
-                  <i className="fas fa-search text-5xl"></i>
-                </div>
-                <h3 className="text-xl font-semibold text-gray-600">Tidak Ada Data Perusahaan</h3>
-                <p className="text-gray-500 mt-1">Tidak ada perusahaan yang sesuai dengan kriteria pencarian.</p>
-              </div>
-            )}
           </div>
 
-          {/* Ringkasan Statistik Audit */}
-          <div className="bg-white p-6 rounded-xl shadow-md mb-6">
-            <h3 className="font-semibold text-xl text-gray-800 mb-4">Ringkasan Audit</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-4 border rounded-lg">
-                <div className="flex items-center">
-                  <div className="bg-blue-100 p-3 rounded-full">
-                    <i className="fas fa-clipboard-check text-blue-600 text-xl"></i>
-                  </div>
-                  <div className="ml-4">
-                    <h4 className="text-gray-500 text-sm">Total Audit Bulan Ini</h4>
-                    <p className="text-2xl font-bold">12</p>
-                  </div>
-                </div>
-              </div>
-              <div className="p-4 border rounded-lg">
-                <div className="flex items-center">
-                  <div className="bg-green-100 p-3 rounded-full">
-                    <i className="fas fa-check-circle text-green-600 text-xl"></i>
-                  </div>
-                  <div className="ml-4">
-                    <h4 className="text-gray-500 text-sm">Audit Selesai</h4>
-                    <p className="text-2xl font-bold">8</p>
-                  </div>
-                </div>
-              </div>
-              <div className="p-4 border rounded-lg">
-                <div className="flex items-center">
-                  <div className="bg-yellow-100 p-3 rounded-full">
-                    <i className="fas fa-clock text-yellow-600 text-xl"></i>
-                  </div>
-                  <div className="ml-4">
-                    <h4 className="text-gray-500 text-sm">Audit Tertunda</h4>
-                    <p className="text-2xl font-bold">4</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Jadwal Audit Mendatang */}
-          <div className="bg-white p-6 rounded-xl shadow-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-xl text-gray-800">Jadwal Audit Mendatang</h3>
-              <Link to="/regulator-dashboard/audit/jadwal" className="text-[#1D3C34] hover:underline text-sm font-medium">
-                Lihat Semua
-              </Link>
+          {/* Upcoming Audit Schedule - ✅ From next_audit_date */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-semibold text-xl text-gray-800 flex items-center gap-2">
+                <FiCalendar className="text-emerald-600" />
+                Upcoming Audit Schedule
+              </h3>
+              <span className="text-sm text-gray-500">
+                {upcomingSchedule.length} scheduled
+              </span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full table-auto border-collapse">
+              <table className="w-full">
                 <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Perusahaan</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Auditor</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Company</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Next Audit Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Auditor</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Risk</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-4 py-4 whitespace-nowrap font-medium">Perusahaan D</td>
-                    <td className="px-4 py-4 whitespace-nowrap">28 April 2025</td>
-                    <td className="px-4 py-4 whitespace-nowrap">Ahmad Rizki</td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">Terjadwal</span>
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-4 py-4 whitespace-nowrap font-medium">Perusahaan E</td>
-                    <td className="px-4 py-4 whitespace-nowrap">5 Mei 2025</td>
-                    <td className="px-4 py-4 whitespace-nowrap">Siti Nurhayati</td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Persiapan</span>
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-4 py-4 whitespace-nowrap font-medium">Perusahaan A</td>
-                    <td className="px-4 py-4 whitespace-nowrap">15 Mei 2025</td>
-                    <td className="px-4 py-4 whitespace-nowrap">Budi Santoso</td>
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">Terjadwal</span>
-                    </td>
-                  </tr>
+                <tbody className="divide-y divide-gray-100">
+                  {upcomingSchedule.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="px-4 py-8 text-center text-gray-500">
+                        <FiCalendar className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+                        <p>No upcoming audit scheduled</p>
+                        <p className="text-xs text-gray-400 mt-1">Schedule audits by setting next audit date</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    upcomingSchedule.map((schedule) => (
+                      <tr key={schedule.id} className="hover:bg-gray-50 transition">
+                        <td className="px-4 py-4 font-medium text-gray-700">{schedule.company}</td>
+                        <td className="px-4 py-4 text-gray-600 flex items-center gap-2">
+                          <FiCalendar className="h-4 w-4 text-gray-400" />
+                          {schedule.date}
+                        </td>
+                        <td className="px-4 py-4 text-gray-600">{schedule.auditor}</td>
+                        <td className="px-4 py-4 text-center">
+                          <span
+                            className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                              schedule.risk === "Low"
+                                ? "bg-green-100 text-green-700"
+                                : schedule.risk === "Medium"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : schedule.risk === "High"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-gray-100 text-gray-700"
+                            }`}
+                          >
+                            {schedule.risk}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span
+                            className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                              schedule.status === "Overdue"
+                                ? "bg-red-100 text-red-700"
+                                : schedule.status === "Upcoming"
+                                ? "bg-orange-100 text-orange-700"
+                                : schedule.status === "Scheduled"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-purple-100 text-purple-700"
+                            }`}
+                          >
+                            {schedule.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );
 };
 
-export default AuditPerusahaan;
+export default AuditCompanies;
