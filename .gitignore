@@ -120,4 +120,24 @@ temp/
 
 # Test coverage
 coverage/
-.nyc_output/
+.nyc_output/backend/public/retirements/*.pdf
+backend/public/retirements/*
+
+# Blockchain private keys & certificates (CRITICAL!)
+blockchain/crypto/
+blockchain/organizations/
+**/priv_sk
+**/*_sk
+**/*. key
+**/keystore/
+**/fabric-ca-server. db
+
+# Test files
+backend/test-email.*
+*. zip
+backend/server. zip
+
+# Blockchain generated files
+blockchain/channel-artifacts/
+blockchain/system-genesis-block/
+blockchain/*. json
