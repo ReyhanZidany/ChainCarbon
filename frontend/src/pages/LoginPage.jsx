@@ -1,14 +1,51 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/chaincarbon_logo_transparent.png";
+import API from "../api/axios.js";
 
 const LoginPage = () => {
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  // Handle input change
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  // Handle login submit
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+    try {
+      const res = await API.post("/auth/login", form);
+
+      // Simpan token & user ke localStorage
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
+
+      setMessage("Login berhasil ✅");
+
+      // Cek email untuk tentukan role
+      if (form.email === "admin@chaincarbon-regulator.com") {
+        navigate("/regulator"); // Regulator ke dashboard regulator
+      } else {
+        navigate("/dashboard"); // User biasa ke dashboard user
+      }
+    } catch (err) {
+      setMessage(err.response?.data?.message || "Terjadi kesalahan");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-white px-6">
       <div className="flex max-w-5xl w-full bg-white rounded-2xl shadow-2xl overflow-hidden">
-        {/* Sisi Kiri: Brand & Info */}
+        {/* Sisi Kiri */}
         <div className="hidden md:flex flex-col justify-center items-center w-1/2 bg-gradient-to-br from-emerald-500 via-emerald-600 to-cyan-600 p-10 text-white relative">
-          {/* Logo */}
           <div className="relative z-10 flex flex-col items-center">
             <img
               src={logo}
@@ -25,7 +62,7 @@ const LoginPage = () => {
             </p>
           </div>
 
-          {/* Dekorasi Wave */}
+          {/* Wave dekorasi */}
           <div className="absolute bottom-0 left-0 w-full overflow-hidden leading-[0]">
             <svg
               className="relative block w-full h-20"
@@ -58,14 +95,18 @@ const LoginPage = () => {
             Gunakan email dan password yang sudah terdaftar
           </p>
 
-          <form className="space-y-5">
+          <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm font-medium text-slate-700">
                 Email
               </label>
               <input
                 type="email"
+                name="email"
                 placeholder="nama@email.com"
+                value={form.email}
+                onChange={handleChange}
+                required
                 className="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
               />
             </div>
@@ -76,18 +117,27 @@ const LoginPage = () => {
               </label>
               <input
                 type="password"
+                name="password"
                 placeholder="********"
+                value={form.password}
+                onChange={handleChange}
+                required
                 className="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
               />
             </div>
 
             <button
               type="submit"
+              disabled={loading}
               className="w-full bg-gradient-to-r from-emerald-500 to-cyan-600 text-white py-3 rounded-lg font-semibold hover:from-emerald-600 hover:to-cyan-700 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
             >
-              Login
+              {loading ? "Memproses..." : "Login"}
             </button>
           </form>
+
+          {message && (
+            <p className="mt-4 text-center text-sm text-red-500">{message}</p>
+          )}
 
           {/* Pemisah */}
           <div className="flex items-center justify-center mt-8">

@@ -1,9 +1,60 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown } from "lucide-react";
 import logo from "../assets/chaincarbon_logo_transparent.png";
+import API from "../api/axios"; // axios helper
 
 const Register = () => {
+  const navigate = useNavigate();
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    company: "",
+    website: "",
+    type: "",
+    province: "",
+    city: "",
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  // Handle input text
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  // Handle select dropdown
+  const handleSelect = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  // Handle submit register
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+    try {
+      const res = await API.post("/auth/register", {
+        name: form.company || form.name, // backend kita pakai "name"
+        email: form.email,
+        password: form.password,
+        website: form.website,
+        type: form.type,
+        province: form.province,
+        city: form.city,
+      });
+
+      setMessage(res.data.message || "Registrasi berhasil ✅");
+      navigate("/login");
+    } catch (err) {
+      setMessage(err.response?.data?.message || "Terjadi kesalahan");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-white px-6">
       <div className="flex max-w-6xl w-full bg-white rounded-2xl shadow-2xl overflow-hidden">
@@ -34,7 +85,10 @@ const Register = () => {
             Isi data perusahaan Anda untuk melanjutkan
           </p>
 
-          <form className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <form
+            className="grid grid-cols-1 md:grid-cols-2 gap-6"
+            onSubmit={handleSubmit}
+          >
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-slate-700">
@@ -42,6 +96,10 @@ const Register = () => {
               </label>
               <input
                 type="email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                required
                 placeholder="nama@email.com"
                 className="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg shadow-sm 
                 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
@@ -55,6 +113,10 @@ const Register = () => {
               </label>
               <input
                 type="password"
+                name="password"
+                value={form.password}
+                onChange={handleChange}
+                required
                 placeholder="********"
                 className="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg shadow-sm 
                 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
@@ -68,6 +130,10 @@ const Register = () => {
               </label>
               <input
                 type="text"
+                name="company"
+                value={form.company}
+                onChange={handleChange}
+                required
                 placeholder="PT Hijau Bersama"
                 className="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg shadow-sm 
                 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
@@ -81,6 +147,9 @@ const Register = () => {
               </label>
               <input
                 type="url"
+                name="website"
+                value={form.website}
+                onChange={handleChange}
                 placeholder="https://perusahaan.com"
                 className="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg shadow-sm 
                 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition"
@@ -94,6 +163,10 @@ const Register = () => {
               </label>
               <div className="relative mt-1">
                 <select
+                  name="type"
+                  value={form.type}
+                  onChange={handleSelect}
+                  required
                   className="w-full px-4 py-3 pr-10 border border-slate-300 rounded-lg shadow-sm bg-white appearance-none cursor-pointer
                   focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-300 ease-in-out
                   hover:shadow-md hover:border-emerald-400"
@@ -147,6 +220,10 @@ const Register = () => {
               </label>
               <div className="relative mt-1">
                 <select
+                  name="province"
+                  value={form.province}
+                  onChange={handleSelect}
+                  required
                   className="w-full px-4 py-3 pr-10 border border-slate-300 rounded-lg shadow-sm bg-white appearance-none cursor-pointer
                   focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-300 ease-in-out
                   hover:shadow-md hover:border-emerald-400"
@@ -173,6 +250,10 @@ const Register = () => {
               </label>
               <div className="relative mt-1">
                 <select
+                  name="city"
+                  value={form.city}
+                  onChange={handleSelect}
+                  required
                   className="w-full px-4 py-3 pr-10 border border-slate-300 rounded-lg shadow-sm bg-white appearance-none cursor-pointer
                   focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-300 ease-in-out
                   hover:shadow-md hover:border-emerald-400"
@@ -196,14 +277,19 @@ const Register = () => {
             <div className="md:col-span-2 flex justify-between gap-6">
               <button
                 type="submit"
+                disabled={loading}
                 className="flex-1 bg-gradient-to-r from-emerald-500 to-cyan-600 text-white py-3 rounded-lg font-semibold 
                 hover:from-emerald-600 hover:to-cyan-700 shadow-lg hover:shadow-xl transform hover:scale-105 
                 transition-all duration-300"
               >
-                Daftar
+                {loading ? "Mendaftarkan..." : "Daftar"}
               </button>
             </div>
           </form>
+
+          {message && (
+            <p className="mt-4 text-center text-sm text-red-500">{message}</p>
+          )}
 
           <p className="text-sm text-center mt-6 text-slate-600">
             Sudah punya akun?{" "}

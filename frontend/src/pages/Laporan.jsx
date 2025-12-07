@@ -23,8 +23,6 @@ import {
   FiArrowUp,
   FiArrowDown,
   FiCalendar,
-  FiFilter,
-  FiFileText,
 } from "react-icons/fi";
 
 ChartJS.register(

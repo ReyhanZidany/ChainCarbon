@@ -1,10 +1,17 @@
 // src/App.js
 import React, { useState } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+
+// Public Pages
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import Register from "./pages/Register";
+
+// Marketplace
 import Marketplace from "./pages/Marketplace";
+import DetailProyek from "./pages/DetailProyek";
+
+// User Dashboard
 import DashboardUser from "./pages/DashboardUser";
 import ProyekSaya from "./pages/ProyekSaya";
 import PengajuanProyek from "./pages/PengajuanProyek";
@@ -12,7 +19,9 @@ import DetailProyekSaya from "./pages/DetailProyekSaya";
 import SertifikatKepemilikan from "./pages/SertifikatKepemilikan";
 import RiwayatTransaksi from "./pages/RiwayatTransaksi";
 import Laporan from "./pages/Laporan";
-import DetailProyek from "./pages/DetailProyek";
+import Profile from "./pages/Profile"; // ✅ Profile Page
+
+// Regulator
 import RegulatorDashboard from "./pages/RegulatorDashboard";
 import AuditPerusahaan from "./pages/AuditPerusahaan";
 import LaporanAnalisis from "./pages/LaporanAnalisis";
@@ -24,7 +33,7 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* Public Routes */}
+        {/* === Public Routes === */}
         <Route path="/" element={<LandingPage isLoggedIn={isLoggedIn} />} />
         <Route
           path="/login"
@@ -32,23 +41,24 @@ function App() {
         />
         <Route path="/register" element={<Register />} />
 
-        {/* Marketplace */}
+        {/* === Marketplace Routes === */}
         <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/marketplace/proyek/:id" element={<DetailProyek />} />
 
-        {/* User Dashboard dengan nested routes */}
+        {/* === User Dashboard Routes (Nested) === */}
         <Route path="/dashboard" element={<DashboardUser />}>
-          {/* Route index kosong - dashboard content akan dihandle di DashboardUser component */}
-          <Route index element={<></>} />
+          <Route index element={<></>} /> {/* default dashboard content */}
           <Route path="proyek" element={<ProyekSaya />} />
           <Route path="proyek/:id" element={<DetailProyekSaya />} />
           <Route path="pengajuan" element={<PengajuanProyek />} />
           <Route path="sertifikat/:id" element={<SertifikatKepemilikan />} />
           <Route path="transaksi" element={<RiwayatTransaksi />} />
           <Route path="laporan" element={<Laporan />} />
+          <Route path="profile" element={<Profile />} />{" "}
+          {/* ✅ Profile route */}
         </Route>
 
-        {/* Regulator */}
+        {/* === Regulator Routes === */}
         <Route path="/regulator" element={<RegulatorDashboard />} />
         <Route path="/regulator/audit" element={<AuditPerusahaan />} />
         <Route path="/regulator/laporan" element={<LaporanAnalisis />} />

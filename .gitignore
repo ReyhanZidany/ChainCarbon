@@ -1,0 +1,123 @@
+# ==========================================
+# SENSITIVE DATA - NEVER COMMIT THESE
+# ==========================================
+
+# Environment variables (contains API keys, passwords, tokens)
+.env
+. env.local
+.env.production
+.env.*. local
+*. env
+
+# Private keys & certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+*.ppk
+
+# Service account & cloud credentials
+service-account-*.json
+*-credentials.json
+gcp-*.json
+firebase-adminsdk-*.json
+. aws/
+aws-credentials
+
+# Terraform secrets
+*.tfvars
+terraform.tfstate
+terraform.tfstate.backup
+
+# Database dumps & backups
+*.sql
+*.dump
+*. sqlite
+*. db
+backup/
+backups/
+exports/
+
+# Hyperledger Fabric wallets (contains private keys)
+wallet/
+**/wallet/
+
+# Config files with secrets
+config/secrets.js
+config/production.js
+connection-*. json
+# Jika ada connection profile dengan credentials, add here
+
+# ==========================================
+# BUILD ARTIFACTS & DEPENDENCIES
+# ==========================================
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json  # optional, some teams commit this
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+build/
+. next/
+out/
+. cache/
+coverage/
+
+# Logs
+logs/
+*.log
+
+# ==========================================
+# OS & EDITOR FILES
+# ==========================================
+
+# macOS
+.DS_Store
+. AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*. suo
+*.user
+*.userosscache
+*.code-workspace
+
+# ==========================================
+# PROJECT SPECIFIC
+# ==========================================
+
+# Uploaded files (images, documents, PDFs)
+backend/uploads/
+backend/public/uploads/
+frontend/public/uploads/
+public/retirements/*. pdf 
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Test coverage
+coverage/
+.nyc_output/
