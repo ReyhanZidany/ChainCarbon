@@ -6,8 +6,8 @@
   
   Decentralized carbon credit marketplace built on Hyperledger Fabric for transparent and immutable carbon trading.
   
-  [![License: MIT](https://img.shields. io/badge/License-MIT-yellow.svg)](https://opensource. org/licenses/MIT)
-  [![Node.js Version](https://img.shields.io/badge/node-%3E%3D16. 0.0-brightgreen)](https://nodejs.org/)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+  [![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen)](https://nodejs.org/)
   [![Hyperledger Fabric](https://img.shields.io/badge/Fabric-2.5-blue)](https://www.hyperledger.org/use/fabric)
 </div>
 
