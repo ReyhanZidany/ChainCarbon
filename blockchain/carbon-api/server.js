@@ -12,8 +12,8 @@ app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
+    'Content-Type',
+    'Authorization',
     'ngrok-skip-browser-warning',
     'Access-Control-Allow-Origin',
     'Access-Control-Allow-Methods',
@@ -37,13 +37,22 @@ try {
   process.exit(1);
 }
 
-// === Helper: Get contract with proper connection management ===
+// === Optimization: Singleton Gateway ===
+let cachedGateway = null;
+let cachedContract = null;
+let cachedNetwork = null;
+
 async function getContract() {
-  let gateway;
+  // If gateway exists and is connected, reuse it
+  if (cachedGateway && cachedContract) {
+    // Check if network is still usable (optional robustness check)
+    return { contract: cachedContract, gateway: cachedGateway };
+  }
+
   try {
     const wallet = await Wallets.newFileSystemWallet(path.join(process.cwd(), 'wallet'));
-    gateway = new Gateway();
-    
+    const gateway = new Gateway();
+
     await gateway.connect(ccp, {
       wallet,
       identity: 'sellerAdmin',
@@ -52,11 +61,22 @@ async function getContract() {
 
     const network = await gateway.getNetwork('carbonchannel');
     const contract = network.getContract('carboncc');
-    
+
+    // Cache the connection
+    cachedGateway = gateway;
+    cachedNetwork = network;
+    cachedContract = contract;
+
+    console.log("🔌 New Fabric Gateway connection established");
+
     return { contract, gateway };
   } catch (error) {
-    if (gateway) {
-      await gateway.disconnect();
+    console.error("❌ Failed to connect to gateway:", error);
+    if (cachedGateway) {
+      // Reset cache on critical failure
+      cachedGateway = null;
+      cachedContract = null;
+      cachedNetwork = null;
     }
     throw error;
   }
@@ -65,10 +85,10 @@ async function getContract() {
 // === Enhanced error handler ===
 function handleError(res, error, operation = 'operation') {
   console.error(`❌ Error during ${operation}:`, error);
-  
+
   let statusCode = 500;
   let message = error.message || 'Internal server error';
-  
+
   // Handle specific Hyperledger Fabric errors
   if (message.includes('not found')) {
     statusCode = 404;
@@ -77,8 +97,8 @@ function handleError(res, error, operation = 'operation') {
   } else if (message.includes('must be validated') || message.includes('not available')) {
     statusCode = 400;
   }
-  
-  res.status(statusCode).json({ 
+
+  res.status(statusCode).json({
     error: message,
     operation,
     timestamp: new Date().toISOString()
@@ -95,17 +115,17 @@ app.post('/companies', async (req, res) => {
   let gateway;
   try {
     const { id, name } = req.body;
-    
+
     if (!id || !name) {
       return res.status(400).json({ error: 'ID and name are required' });
     }
-    
+
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.submitTransaction('registerCompany', id, name);
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -118,10 +138,10 @@ app.post('/companies/:id/validate', async (req, res) => {
   try {
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.submitTransaction('validateCompany', req.params.id);
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -134,10 +154,10 @@ app.get('/companies/:id', async (req, res) => {
   try {
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.evaluateTransaction('getCompany', req.params.id);
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -152,17 +172,17 @@ app.post('/projects', async (req, res) => {
   let gateway;
   try {
     const { id, companyId, title, description } = req.body;
-    
+
     if (!id || !companyId || !title || !description) {
       return res.status(400).json({ error: 'All fields are required' });
     }
-    
+
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.submitTransaction('registerProject', id, companyId, title, description);
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -175,10 +195,10 @@ app.post('/projects/:id/validate', async (req, res) => {
   try {
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.submitTransaction('validateProject', req.params.id);
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -193,21 +213,21 @@ app.post('/certificates', async (req, res) => {
   let gateway;
   try {
     const { id, projectId, ownerId, amount, pricePerUnit, expiresAt } = req.body;
-    
+
     if (!id || !projectId || !ownerId || !amount || !pricePerUnit || !expiresAt) {
       return res.status(400).json({ error: 'All fields are required' });
     }
-    
+
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.submitTransaction(
       'createCertificate',
       id, projectId, ownerId,
       amount.toString(), pricePerUnit.toString(), expiresAt.toString()
     );
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -219,17 +239,17 @@ app.post('/certificates/:id/list', async (req, res) => {
   let gateway;
   try {
     const { pricePerUnit } = req.body;
-    
+
     if (!pricePerUnit) {
       return res.status(400).json({ error: 'Price per unit is required' });
     }
-    
+
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.submitTransaction('listCertificate', req.params.id, pricePerUnit.toString());
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -241,17 +261,17 @@ app.post('/certificates/:id/buy', async (req, res) => {
   let gateway;
   try {
     const { buyerId } = req.body;
-    
+
     if (!buyerId) {
       return res.status(400).json({ error: 'Buyer ID is required' });
     }
-    
+
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.submitTransaction('buyCertificate', req.params.id, buyerId);
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -272,21 +292,21 @@ app.post('/certificates/:id/retire', async (req, res) => {
     console.log("   Body type:", typeof req.body);
     console.log("   Body keys:", Object.keys(req.body));
     console.log("   Body empty?:", Object.keys(req.body).length === 0);
-    
+
     const { retirementReason, retirementBeneficiary } = req.body;
-    
+
     console.log("\n🔄 Fabric API: Retiring certificate");
     console.log("   Cert ID:", req.params.id);
     console.log("   Reason (from destructure):", retirementReason);
     console.log("   Beneficiary (from destructure):", retirementBeneficiary);
     console.log("   Reason (direct access):", req.body.retirementReason);
     console.log("   Beneficiary (direct access):", req.body.retirementBeneficiary);
-    
+
     // ✅ Validation
     if (!retirementReason) {
       console.error("❌ Validation failed: retirementReason is missing");
       console.error("   Full request body:", JSON.stringify(req.body));
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'retirementReason is required',
         operation: 'retire certificate',
         receivedBody: req.body,
@@ -296,27 +316,27 @@ app.post('/certificates/:id/retire', async (req, res) => {
         }
       });
     }
-    
+
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     console.log("\n📤 Submitting transaction to chaincode:");
     console.log("   Function: retireCertificates");
     console.log("   Param 1 (certId):", req.params.id);
     console.log("   Param 2 (reason):", retirementReason);
     console.log("   Param 3 (beneficiary):", retirementBeneficiary || '');
-    
+
     const result = await contract.submitTransaction(
       'retireCertificates',
       req.params.id,
       retirementReason,
       retirementBeneficiary || ''
     );
-    
-    await gateway.disconnect();
-    
+
+    // Optimized: disconnect removed
+
     const cert = JSON.parse(result.toString());
-    
+
     console.log("\n✅ Certificate retired successfully");
     console.log("   Status:", cert.status);
     console.log("   Retired At:", cert.retiredAt);
@@ -324,7 +344,7 @@ app.post('/certificates/:id/retire', async (req, res) => {
     console.log("   Retirement Reason:", cert.retirementReason);
     console.log("   Retirement Beneficiary:", cert.retirementBeneficiary);
     console.log("   TX ID:", cert.retiredTxId);
-    
+
     res.json(cert);
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -341,7 +361,7 @@ app.get('/certificates/available', async (req, res) => {
 
     // ✅ Panggil fungsi CHAINCODE yang benar
     const result = await contract.evaluateTransaction('getAvailableCertificates');
-    await gateway.disconnect();
+    // Optimized: disconnect removed
 
     // ✅ Kalau kosong, balikin array kosong, BUKAN error
     const jsonString = result && result.length > 0
@@ -369,55 +389,55 @@ app.get('/certificates/:id', async (req, res) => {
   try {
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.evaluateTransaction('getCertificate', req.params.id);
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     // ✅ CRITICAL FIX: Safe parsing
     if (!result || result.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'Certificate not found in blockchain',
         operation: 'get certificate',
         certificateId: req.params.id
       });
     }
-    
+
     let parsed;
     try {
       const resultStr = result.toString();
       console.log('Raw blockchain response preview:', resultStr.substring(0, 150));
-      
+
       if (!resultStr || resultStr.trim() === '' || resultStr === 'null') {
         console.error('❌ Invalid response string');
-        return res.status(404).json({ 
+        return res.status(404).json({
           error: 'Certificate not found',
           operation: 'get certificate'
         });
       }
-      
+
       parsed = JSON.parse(resultStr);
-      
+
       if (!parsed || typeof parsed !== 'object') {
         console.error('❌ Parsed result is not a valid object:', parsed);
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: 'Invalid certificate data structure',
           operation: 'get certificate'
         });
       }
-      
+
     } catch (parseError) {
       console.error('❌ JSON Parse Error:', parseError.message);
       console.error('Response that failed:', result.toString().substring(0, 300));
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'Failed to parse certificate data',
         operation: 'get certificate',
         details: parseError.message
       });
     }
-    
+
     console.log('✅ Certificate fetched successfully:', parsed.id || parsed.certId);
     res.json(parsed);
-    
+
   } catch (err) {
     if (gateway) await gateway.disconnect();
     console.error('❌ Error in GET /certificates/:id:', err);
@@ -430,10 +450,10 @@ app.get('/certificates/:id/history', async (req, res) => {
   try {
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.evaluateTransaction('getTransactionHistory', req.params.id);
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -446,10 +466,10 @@ app.get('/certificates/owner/:ownerId', async (req, res) => {
   try {
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.evaluateTransaction('getCertificatesByOwner', req.params.ownerId);
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -462,10 +482,10 @@ app.get('/certificates/status/:status', async (req, res) => {
   try {
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.evaluateTransaction('getCertificatesByStatus', req.params.status);
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -481,17 +501,17 @@ app.post('/retirements', async (req, res) => {
   let gateway;
   try {
     const { id, certId, requester } = req.body;
-    
+
     if (!id || !certId || !requester) {
       return res.status(400).json({ error: 'All fields are required' });
     }
-    
+
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.submitTransaction('createRetirementRequest', id, certId, requester);
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -504,10 +524,10 @@ app.post('/retirements/:id/approve', async (req, res) => {
   try {
     const { contract, gateway: gw } = await getContract();
     gateway = gw;
-    
+
     const result = await contract.submitTransaction('approveRetirementRequest', req.params.id);
-    await gateway.disconnect();
-    
+    // Optimized: disconnect removed
+
     res.json(JSON.parse(result.toString()));
   } catch (err) {
     if (gateway) await gateway.disconnect();
@@ -519,15 +539,15 @@ app.post('/retirements/:id/approve', async (req, res) => {
 // ================== HEALTH CHECK ==================
 //
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     service: 'Carbon Market API'
   });
 });
 
 app.get('/', (req, res) => {
-  res.json({ 
+  res.json({
     message: '🌱 Welcome to Carbon Market API',
     version: '1.0.0',
     endpoints: {

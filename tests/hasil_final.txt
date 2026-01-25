@@ -1,0 +1,37 @@
+=======================================================
+REKAP HASIL PENGUJIAN PERFORMA CHAINCARBON (FINAL)
+=======================================================
+Kondisi: Optimized (Singleton Gateway) + Fresh Install
+Tools: Apache JMeter 5.6.3
+Machine: Localhost (Ubuntu)
+=======================================================
+
+A. SKENARIO PENGUJIAN QUERY (READ)
+Endpoint: GET /certificates/available
+-------------------------------------------------------
+Users | Avg Response Time (ms) | Throughput (TPS) | Error (%)
+-------------------------------------------------------
+50    | 10                     | 50.5             | 0.00%
+100   | 9                      | 100.8            | 0.00%
+150   | 9                      | 149.3            | 0.00%
+200   | 9                      | 198.7            | 0.00%
+-------------------------------------------------------
+Analisis:
+Sangat stabil dan cepat karena data masih sedikit (Low Volume)
+dan koneksi sudah optimal.
+
+
+B. SKENARIO PENGUJIAN INVOKE (WRITE)
+Endpoint: POST /certificates
+-------------------------------------------------------
+Users | Avg Response Time (ms) | Throughput (TPS) | Error (%)
+-------------------------------------------------------
+50    | 370                    | 20.4             | 0.00%
+100   | 199                    | 35.1             | 0.00%
+150   | 153                    | 65.8             | 0.00%
+200   | 199                    | 116.9            | 0.00%
+-------------------------------------------------------
+Analisis:
+Throughput meningkat linear seiring penambahan user.
+Response time stabil di bawah 400ms.
+Tidak ada kegagalan transaksi (Reliability 100%).

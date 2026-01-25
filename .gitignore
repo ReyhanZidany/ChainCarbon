@@ -37,7 +37,7 @@ terraform.tfstate.backup
 *.sql
 *.dump
 *. sqlite
-*. db
+*.db
 backup/
 backups/
 exports/
@@ -134,10 +134,17 @@ blockchain/organizations/
 
 # Test files
 backend/test-email.*
-*. zip
+*.zip
 backend/server. zip
 
 # Blockchain generated files
 blockchain/channel-artifacts/
 blockchain/system-genesis-block/
-blockchain/*. json
+blockchain/*.json
+
+# Performance Test Artifacts
+tools/
+report_*/
+results_*.jtl
+tests/report_*/
+tests/results_*.jtl

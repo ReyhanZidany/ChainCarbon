@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ChainCarbon Performance Graphs</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; background: #f4f6f9; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .row { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+        .chart-box { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+            width: 45%; 
+            min-width: 400px;
+        }
+        h2 { color: #333; font-size: 18px; margin-bottom: 15px; text-align: center; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Analisis Performa ChainCarbon</h1>
+            <p>Optimized Singleton Gateway &bull; Fresh Install Environment</p>
+        </div>
+
+        <!-- SKENARIO 1: QUERY (READ) -->
+        <h3 style="text-align:center; width:100%; color:#2c3e50;">Skenario A: Query Transaction (Read)</h3>
+        <div class="row">
+            <div class="chart-box">
+                <h2>Query - Response Time (ms)</h2>
+                <canvas id="queryRT"></canvas>
+            </div>
+            <div class="chart-box">
+                <h2>Query - Throughput (TPS)</h2>
+                <canvas id="queryTPS"></canvas>
+            </div>
+        </div>
+
+        <hr style="margin: 30px 0; border: 0; border-top: 1px solid #ddd;">
+
+        <!-- SKENARIO 2: INVOKE (WRITE) -->
+        <h3 style="text-align:center; width:100%; color:#c0392b;">Skenario B: Invoke Transaction (Write)</h3>
+        <div class="row">
+            <div class="chart-box">
+                <h2>Invoke - Response Time (ms)</h2>
+                <canvas id="invokeRT"></canvas>
+            </div>
+            <div class="chart-box">
+                <h2>Invoke - Throughput (TPS)</h2>
+                <canvas id="invokeTPS"></canvas>
+            </div>
+        </div>
+
+        <div class="footer">
+            Generated automatically for Thesis Report | Date: 2026-01-26
+        </div>
+    </div>
+
+    <script>
+        // DATA
+        const users = [50, 100, 150, 200];
+        
+        // Query Data
+        const queryRTData = [10, 9, 9, 9];
+        const queryTPSData = [50.5, 100.8, 149.3, 198.7];
+
+        // Invoke Data
+        const invokeRTData = [370, 199, 153, 199];
+        const invokeTPSData = [20.4, 35.1, 65.8, 116.9];
+
+        // PLOT CHARTS
+        
+        // 1. Query Response Time
+        new Chart(document.getElementById('queryRT'), {
+            type: 'line',
+            data: {
+                labels: users.map(u => u + ' Users'),
+                datasets: [{
+                    label: 'Avg Latency (ms)',
+                    data: queryRTData,
+                    borderColor: '#2980b9',
+                    backgroundColor: 'rgba(41, 128, 185, 0.2)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: { scales: { y: { beginAtZero: true, title: {display: true, text: 'Milliseconds'} } } }
+        });
+
+        // 2. Query Throughput
+        new Chart(document.getElementById('queryTPS'), {
+            type: 'bar',
+            data: {
+                labels: users.map(u => u + ' Users'),
+                datasets: [{
+                    label: 'Transactions Per Second',
+                    data: queryTPSData,
+                    backgroundColor: '#16a085'
+                }]
+            },
+            options: { scales: { y: { beginAtZero: true, title: {display: true, text: 'TPS'} } } }
+        });
+
+        // 3. Invoke Response Time
+        new Chart(document.getElementById('invokeRT'), {
+            type: 'line',
+            data: {
+                labels: users.map(u => u + ' Users'),
+                datasets: [{
+                    label: 'Avg Latency (ms)',
+                    data: invokeRTData,
+                    borderColor: '#c0392b',
+                    backgroundColor: 'rgba(192, 57, 43, 0.2)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: { scales: { y: { beginAtZero: true, title: {display: true, text: 'Milliseconds'} } } }
+        });
+
+        // 4. Invoke Throughput
+        new Chart(document.getElementById('invokeTPS'), {
+            type: 'bar',
+            data: {
+                labels: users.map(u => u + ' Users'),
+                datasets: [{
+                    label: 'Transactions Per Second',
+                    data: invokeTPSData,
+                    backgroundColor: '#d35400'
+                }]
+            },
+            options: { scales: { y: { beginAtZero: true, title: {display: true, text: 'TPS'} } } }
+        });
+    </script>
+</body>
+</html>
