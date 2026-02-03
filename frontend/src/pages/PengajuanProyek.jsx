@@ -7,7 +7,6 @@ import {
   FiUpload,
   FiBriefcase,
   FiMapPin,
-  FiMapPin,
   FiInfo,
   FiImage,
   FiX,
