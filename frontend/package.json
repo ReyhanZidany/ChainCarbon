@@ -20,6 +20,8 @@
     "react-scripts": "5.0.1",
     "react-scroll": "^1.9.3",
     "recharts": "^2.15.2",
+    "sweetalert2": "^11.26.18",
+    "sweetalert2-react-content": "^5.1.1",
     "web-vitals": "^4.2.4"
   },
   "scripts": {
