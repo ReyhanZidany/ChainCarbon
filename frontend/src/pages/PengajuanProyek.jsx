@@ -7,7 +7,7 @@ import {
   FiUpload,
   FiBriefcase,
   FiMapPin,
-  FiCalendar,
+  FiMapPin,
   FiInfo,
   FiImage,
   FiX,
