@@ -336,3 +336,17 @@ export const getPendingUsers = (req, res) => {
     });
   });
 };
+// ============================================
+// EXPORT ALIASES & MISSING FUNCTIONS
+// ============================================
+export const getUserProfile = getCurrentUser; // Alias
+export const updateUserProfile = updateUser;   // Alias
+
+// GET USERS COUNT
+export const getUsersCount = (req, res) => {
+    const sql = "SELECT COUNT(*) as count FROM users";
+    db.query(sql, (err, rows) => {
+        if (err) return res.status(500).json({ success: false, message: "DB Error" });
+        res.json({ success: true, count: rows[0].count });
+    });
+};

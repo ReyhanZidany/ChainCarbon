@@ -37,46 +37,54 @@ import RegulatorPengaturan from "./pages/RegulatorPengaturan";
 function App() {
   return (
     <Router>
-      <Toaster 
+      <Toaster
         position="top-right"
         reverseOrder={false}
         gutter={8}
+        containerStyle={{
+          zIndex: 99999,
+        }}
         toastOptions={{
-          duration: 4000,
+          duration: 5000,
+          className: 'shadow-lg border border-gray-100',
           style: {
-            background: '#363636',
-            color: '#fff',
+            background: '#ffffff',
+            color: '#1e293b',
             padding: '16px',
-            borderRadius: '10px',
+            borderRadius: '12px',
             fontSize: '14px',
-            maxWidth: '500px',
+            maxWidth: '400px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
           },
           success: {
-            duration: 3000,
+            duration: 4000,
             style: {
-              background: '#10b981',
-              color: '#fff',
+              background: '#f0fdf4',
+              color: '#166534',
+              border: '1px solid #bbf7d0',
             },
             iconTheme: {
-              primary: '#fff',
-              secondary: '#10b981',
+              primary: '#166534',
+              secondary: '#f0fdf4',
             },
           },
           error: {
-            duration: 5000,
+            duration: 6000,
             style: {
-              background: '#ef4444',
-              color: '#fff',
+              background: '#fef2f2',
+              color: '#991b1b',
+              border: '1px solid #fecaca',
             },
             iconTheme: {
-              primary: '#fff',
-              secondary: '#ef4444',
+              primary: '#991b1b',
+              secondary: '#fef2f2',
             },
           },
           loading: {
             style: {
-              background: '#3b82f6',
-              color: '#fff',
+              background: '#fff',
+              color: '#0f172a',
+              border: '1px solid #e2e8f0',
             },
           },
         }}
@@ -175,7 +183,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            
+
             {/* ✅ Alternative certificate route */}
             <Route
               path="/sertifikat/:certId"

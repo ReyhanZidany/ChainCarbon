@@ -27,7 +27,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // === Load connection profile ===
-const ccpPath = path.resolve(__dirname, 'connection', 'connection-seller.json');
+// === Load connection profile ===
+const ccpPath = process.env.CCP_PATH
+  ? path.resolve(__dirname, process.env.CCP_PATH)
+  : path.resolve(__dirname, 'connection', 'connection-seller.json');
 
 let ccp;
 try {
@@ -86,6 +89,28 @@ async function getContract() {
 function handleError(res, error, operation = 'operation') {
   console.error(`❌ Error during ${operation}:`, error);
 
+  // ✅ SMART RECOVERY: Check for fatal connectivity errors
+  const errorMessage = error.message || '';
+  if (
+    errorMessage.includes('GRPC') ||
+    errorMessage.includes('14 UNAVAILABLE') ||
+    errorMessage.includes('Connect Failed') ||
+    errorMessage.includes('No peers available') ||
+    errorMessage.includes('failed to connect')
+  ) {
+    console.warn("♻️  Fabric Gateway Connection Broken (Network/GRPC Error). Resetting Singleton...");
+    if (cachedGateway) {
+      try {
+        cachedGateway.disconnect();
+      } catch (e) {
+        console.warn("⚠️ Failed to force close broken gateway:", e.message);
+      }
+    }
+    cachedGateway = null;
+    cachedContract = null;
+    cachedNetwork = null;
+  }
+
   let statusCode = 500;
   let message = error.message || 'Internal server error';
 
@@ -128,7 +153,8 @@ app.post('/companies', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'register company');
   }
 });
@@ -144,7 +170,8 @@ app.post('/companies/:id/validate', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'validate company');
   }
 });
@@ -160,7 +187,8 @@ app.get('/companies/:id', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'get company');
   }
 });
@@ -185,7 +213,8 @@ app.post('/projects', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'register project');
   }
 });
@@ -201,7 +230,8 @@ app.post('/projects/:id/validate', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'validate project');
   }
 });
@@ -230,7 +260,8 @@ app.post('/certificates', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'create certificate');
   }
 });
@@ -252,7 +283,8 @@ app.post('/certificates/:id/list', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'list certificate');
   }
 });
@@ -274,7 +306,8 @@ app.post('/certificates/:id/buy', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'buy certificate');
   }
 });
@@ -347,7 +380,8 @@ app.post('/certificates/:id/retire', async (req, res) => {
 
     res.json(cert);
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'retire certificate');
   }
 });
@@ -456,7 +490,8 @@ app.get('/certificates/:id/history', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'get certificate history');
   }
 });
@@ -472,7 +507,8 @@ app.get('/certificates/owner/:ownerId', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'get certificates by owner');
   }
 });
@@ -488,7 +524,8 @@ app.get('/certificates/status/:status', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'get certificates by status');
   }
 });
@@ -514,7 +551,8 @@ app.post('/retirements', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'create retirement request');
   }
 });
@@ -530,7 +568,8 @@ app.post('/retirements/:id/approve', async (req, res) => {
 
     res.json(JSON.parse(result.toString()));
   } catch (err) {
-    if (gateway) await gateway.disconnect();
+    // Optimized: Do NOT disconnect the shared gateway on error!
+    // if (gateway) await gateway.disconnect();
     handleError(res, err, 'approve retirement request');
   }
 });

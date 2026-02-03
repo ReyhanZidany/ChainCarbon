@@ -1,0 +1,126 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # REVERSE PROXY (SSL Termination & Routing)
+  # ==========================================
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: chaincarbon-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Uncomment for SSL
+      # - ./certbot/conf:/etc/letsencrypt
+      # - ./certbot/www:/var/www/certbot
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - carbon-net
+
+  # ==========================================
+  # FRONTEND (React SPA)
+  # ==========================================
+  frontend:
+    # Use the image built previously or build it here
+    build:
+      context: ../frontend
+      args:
+        - REACT_APP_API_BASE_URL=https://chaincarbon.com/api
+    container_name: chaincarbon-frontend
+    restart: on-failure
+    networks:
+      - carbon-net
+
+  # ==========================================
+  # BACKEND (Express API)
+  # ==========================================
+  backend:
+    build: ../backend
+    container_name: chaincarbon-backend
+    restart: on-failure
+    env_file: .env.prod
+    environment:
+      - DB_HOST=mysql
+      - FABRIC_API=http://blockchain-api:3000
+    depends_on:
+      - mysql
+      - blockchain-api
+    networks:
+      - carbon-net
+
+  # ==========================================
+  # BLOCKCHAIN GATEWAY API (Adaptor)
+  # ==========================================
+  blockchain-api:
+    build: ../blockchain/carbon-api
+    container_name: chaincarbon-blockchain-api
+    restart: on-failure
+    environment:
+      - PORT=3000
+      - CCP_PATH=connection/connection-prod.json
+    volumes:
+      # Mount Wallet (Credentials)
+      - ../blockchain/carbon-api/wallet:/app/wallet
+      # Mount Crypto Config (Certs for TLS)
+      - ../blockchain/organizations:/app/organizations:ro
+    networks:
+      - carbon-net
+
+  # ==========================================
+  # DATABASE (MySQL)
+  # ==========================================
+  mysql:
+    image: mysql:8.0
+    container_name: chaincarbon-mysql
+    restart: unless-stopped
+    env_file: .env.prod
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - carbon-net
+
+  # ==========================================
+  # MONITORING (Prometheus + Grafana)
+  # ==========================================
+  prometheus:
+    image: prom/prometheus
+    container_name: chaincarbon-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    networks:
+      - carbon-net
+
+  grafana:
+    image: grafana/grafana
+    container_name: chaincarbon-grafana
+    restart: unless-stopped
+    ports:
+      - "3002:3000" # Expose Grafana on 3002
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    networks:
+      - carbon-net
+
+# ==========================================
+# INFRASTRUCTURE
+# ==========================================
+networks:
+  carbon-net:
+    external: true
+    name: carbon-market_carbon-net # Must attach to existing Fabric Network
+
+volumes:
+  mysql_data:

@@ -7,6 +7,9 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# Fix for Docker Desktop context issues
+unset DOCKER_HOST
+
 echo -e "${CYAN}"
 echo "╔═══════════════════════════════════════╗"
 echo "║   🌍 ChainCarbon Full Stack Startup  ║"

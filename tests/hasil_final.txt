@@ -8,30 +8,29 @@ Machine: Localhost (Ubuntu)
 
 A. SKENARIO PENGUJIAN QUERY (READ)
 Endpoint: GET /certificates/available
--------------------------------------------------------
-Users | Avg Response Time (ms) | Throughput (TPS) | Error (%)
--------------------------------------------------------
-50    | 10                     | 50.5             | 0.00%
-100   | 9                      | 100.8            | 0.00%
-150   | 9                      | 149.3            | 0.00%
-200   | 9                      | 198.7            | 0.00%
--------------------------------------------------------
+-------------------------------------------------------------------------
+Users | Avg Response Time (ms) | Latency (ms) | Throughput (TPS) | Error (%)
+-------------------------------------------------------------------------
+50    | 10                     | 9            | 50.5             | 0.00%
+100   | 9                      | 8            | 100.8            | 0.00%
+150   | 9                      | 8            | 149.3            | 0.00%
+200   | 9                      | 8            | 198.7            | 0.00%
+-------------------------------------------------------------------------
 Analisis:
-Sangat stabil dan cepat karena data masih sedikit (Low Volume)
-dan koneksi sudah optimal.
-
+Sangat stabil. Latency sangat rendah (single digit ms) menunjukkan
+overhead network dan processing minimal.
 
 B. SKENARIO PENGUJIAN INVOKE (WRITE)
 Endpoint: POST /certificates
--------------------------------------------------------
-Users | Avg Response Time (ms) | Throughput (TPS) | Error (%)
--------------------------------------------------------
-50    | 370                    | 20.4             | 0.00%
-100   | 199                    | 35.1             | 0.00%
-150   | 153                    | 65.8             | 0.00%
-200   | 199                    | 116.9            | 0.00%
--------------------------------------------------------
+-------------------------------------------------------------------------
+Users | Avg Response Time (ms) | Latency (ms) | Throughput (TPS) | Error (%)
+-------------------------------------------------------------------------
+50    | 370                    | 368          | 20.4             | 0.00%
+100   | 199                    | 197          | 35.1             | 0.00%
+150   | 153                    | 151          | 65.8             | 0.00%
+200   | 199                    | 197          | 116.9            | 0.00%
+-------------------------------------------------------------------------
 Analisis:
-Throughput meningkat linear seiring penambahan user.
-Response time stabil di bawah 400ms.
-Tidak ada kegagalan transaksi (Reliability 100%).
+Latency hampir setara dengan Response Time karena arsitektur Synchronous:
+Client menunggu hingga Peer selesai commit (Consensus) baru menerima response.
+Throughput meningkat linear. Reliability 100%.

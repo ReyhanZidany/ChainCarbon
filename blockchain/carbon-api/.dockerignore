@@ -1,0 +1,8 @@
+node_modules
+wallet
+logs
+*.log
+.git
+.env
+.gitignore
+tests

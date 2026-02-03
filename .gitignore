@@ -4,10 +4,10 @@
 
 # Environment variables (contains API keys, passwords, tokens)
 .env
-. env.local
+.env.local
 .env.production
-.env.*. local
-*. env
+.env.*.local
+*.env
 
 # Private keys & certificates
 *.pem
@@ -25,7 +25,7 @@ service-account-*.json
 *-credentials.json
 gcp-*.json
 firebase-adminsdk-*.json
-. aws/
+.aws/
 aws-credentials
 
 # Terraform secrets
@@ -36,7 +36,7 @@ terraform.tfstate.backup
 # Database dumps & backups
 *.sql
 *.dump
-*. sqlite
+*.sqlite
 *.db
 backup/
 backups/
@@ -49,7 +49,7 @@ wallet/
 # Config files with secrets
 config/secrets.js
 config/production.js
-connection-*. json
+connection-*.json
 # Jika ada connection profile dengan credentials, add here
 
 # ==========================================
@@ -67,9 +67,9 @@ pnpm-lock.yaml
 # Build outputs
 dist/
 build/
-. next/
+.next/
 out/
-. cache/
+.cache/
 coverage/
 
 # Logs
@@ -82,7 +82,7 @@ logs/
 
 # macOS
 .DS_Store
-. AppleDouble
+.AppleDouble
 .LSOverride
 
 # Windows
@@ -98,7 +98,7 @@ Desktop.ini
 .idea/
 *.swp
 *.swo
-*. suo
+*.suo
 *.user
 *.userosscache
 *.code-workspace
@@ -111,7 +111,7 @@ Desktop.ini
 backend/uploads/
 backend/public/uploads/
 frontend/public/uploads/
-public/retirements/*. pdf 
+public/retirements/*.pdf
 
 # Temporary files
 tmp/
@@ -128,14 +128,14 @@ blockchain/crypto/
 blockchain/organizations/
 **/priv_sk
 **/*_sk
-**/*. key
+**/*.key
 **/keystore/
-**/fabric-ca-server. db
+**/fabric-ca-server.db
 
 # Test files
 backend/test-email.*
 *.zip
-backend/server. zip
+backend/server.zip
 
 # Blockchain generated files
 blockchain/channel-artifacts/

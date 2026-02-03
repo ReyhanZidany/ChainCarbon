@@ -12,13 +12,13 @@ const STATIC_BASE_URL =
     ? "http://localhost:5000"
     : `http://${window.location.hostname}:5000`);
 
-    const API = axios.create({
-      baseURL: API_BASE_URL, 
-      timeout: 90000, 
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+const API = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 90000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
 API.interceptors.request.use(
   (config) => {
@@ -47,4 +47,4 @@ API.interceptors.response.use(
 );
 
 export default API;
-export { STATIC_BASE_URL };
+export { API_BASE_URL, STATIC_BASE_URL };

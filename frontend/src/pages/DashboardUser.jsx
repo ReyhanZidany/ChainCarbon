@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import toast from 'react-hot-toast'; 
+import toast from 'react-hot-toast';
 import {
   FiGrid,
   FiFolder,
@@ -23,17 +23,9 @@ import {
   FiX,
 } from "react-icons/fi";
 import logo from "../assets/chaincarbon_logo_transparent.png";
+import { STATIC_BASE_URL } from "../api/axios";
 
-const getApiBaseUrl = () => {
-  const hostname = window.location.hostname;
-  const port = 5000;
-  
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:5000';
-  }
-  
-  return `http://${hostname}:${port}`;
-};
+// Helper function removed, using STATIC_BASE_URL directly
 
 // ============================================
 // Sidebar Item Component
@@ -44,7 +36,7 @@ const SidebarItem = ({ icon: Icon, label, to, isExpanded, isActive, requireAuth 
 
   const handleClick = (e) => {
     if (onClick) onClick();
-    
+
     if (requireAuth && !isAuthenticated()) {
       e.preventDefault();
       navigate('/login', { state: { from: { pathname: to } } });
@@ -55,11 +47,10 @@ const SidebarItem = ({ icon: Icon, label, to, isExpanded, isActive, requireAuth 
     <Link
       to={to}
       onClick={handleClick}
-      className={`flex items-center gap-4 px-4 py-3 rounded-lg mx-2 mb-1 hover:bg-emerald-50 transition-all duration-300 ease-in-out ${
-        isActive
-          ? "bg-gradient-to-r from-emerald-500 to-cyan-600 text-white shadow-lg"
-          : "text-gray-700 hover:text-emerald-600"
-      }`}
+      className={`flex items-center gap-4 px-4 py-3 rounded-lg mx-2 mb-1 hover:bg-emerald-50 transition-all duration-300 ease-in-out ${isActive
+        ? "bg-gradient-to-r from-emerald-500 to-cyan-600 text-white shadow-lg"
+        : "text-gray-700 hover:text-emerald-600"
+        }`}
     >
       <Icon className="text-xl flex-shrink-0" />
       {isExpanded && <span className="text-sm font-medium whitespace-nowrap">{label}</span>}
@@ -92,7 +83,7 @@ const DashboardUser = () => {
   const { user, logout, isAuthenticated, getToken, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const [isExpanded, setIsExpanded] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeCertificatesCount, setActiveCertificatesCount] = useState(0);
@@ -103,7 +94,7 @@ const DashboardUser = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const isMainDashboard = location.pathname === "/dashboard";
-  
+
   const hasFetchedData = useRef(false);
   const hasCheckedRole = useRef(false); // ✅ NEW: Prevent multiple role checks
 
@@ -134,7 +125,7 @@ const DashboardUser = () => {
         if (token && userStr) {
           const userData = JSON.parse(userStr);
           const actualUser = userData.user || userData;
-          
+
           console.log('🔍 [DashboardUser] Checking user role:', {
             type: actualUser.type,
             role: actualUser.role,
@@ -142,24 +133,24 @@ const DashboardUser = () => {
           });
 
           // ✅ CRITICAL: Check if user is regulator
-          const isRegulator = 
-            actualUser.type === 'regulator' || 
+          const isRegulator =
+            actualUser.type === 'regulator' ||
             actualUser.role === 'regulator';
 
           if (isRegulator && location.pathname.startsWith('/dashboard')) {
             console.log('⚠️ [DashboardUser] Regulator detected in user dashboard!  Redirecting.. .');
-            
+
             // ✅ Clear user dashboard state
             setCompany(null);
             setProjects([]);
             setActivities([]);
             setSchedules([]);
             hasFetchedData.current = false;
-            
+
             // ✅ Redirect to regulator dashboard
             toast.info('Redirecting to regulator dashboard...');
             navigate('/regulator', { replace: true });
-            
+
             hasCheckedRole.current = true;
             return;
           }
@@ -186,10 +177,10 @@ const DashboardUser = () => {
         if (storedUser) {
           const parsedData = JSON.parse(storedUser);
           const userData = parsedData.user || parsedData;
-          
+
           // ✅ CRITICAL: Double-check role before setting state
-          const isRegulator = 
-            userData.type === 'regulator' || 
+          const isRegulator =
+            userData.type === 'regulator' ||
             userData.role === 'regulator';
 
           if (isRegulator && location.pathname.startsWith('/dashboard')) {
@@ -215,10 +206,10 @@ const DashboardUser = () => {
 
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('userUpdated', loadUserFromStorage);
-    
+
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('userUpdated',loadUserFromStorage);
+      window.removeEventListener('userUpdated', loadUserFromStorage);
     };
   }, [location.pathname]);
 
@@ -226,7 +217,7 @@ const DashboardUser = () => {
   useEffect(() => {
     const handleLogoutEvent = () => {
       console.log('🔓 [DashboardUser] Logout event received');
-      
+
       // ✅ Clear ALL state
       setCompany(null);
       setProjects([]);
@@ -236,13 +227,13 @@ const DashboardUser = () => {
       hasCheckedRole.current = false; // ✅ Reset role check
       setIsMobileMenuOpen(false);
       setIsLoggingOut(false);
-      
+
       // ✅ INSTANT redirect to home (not login)
       navigate('/', { replace: true });
     };
 
     window.addEventListener('userLoggedOut', handleLogoutEvent);
-    
+
     return () => {
       window.removeEventListener('userLoggedOut', handleLogoutEvent);
     };
@@ -250,10 +241,10 @@ const DashboardUser = () => {
 
   // ✅ Update company when user from context changes
   useEffect(() => {
-    if (user && ! company) {
+    if (user && !company) {
       // ✅ Check if user is regulator
-      const isRegulator = 
-        user.type === 'regulator' || 
+      const isRegulator =
+        user.type === 'regulator' ||
         user.role === 'regulator';
 
       if (isRegulator && location.pathname.startsWith('/dashboard')) {
@@ -276,7 +267,7 @@ const DashboardUser = () => {
 
     // ✅ Public routes
     const publicRoutes = ['/marketplace'];
-    const isPublicRoute = publicRoutes.some(route => 
+    const isPublicRoute = publicRoutes.some(route =>
       location.pathname === route || location.pathname.startsWith(route)
     );
 
@@ -290,19 +281,19 @@ const DashboardUser = () => {
       const token = localStorage.getItem('token');
       const userStr = localStorage.getItem('user');
 
-      if (! token || !userStr) {
+      if (!token || !userStr) {
         console.log('❌ [DashboardUser] No auth data, redirecting to login');
-        navigate('/login', { 
-          replace: true, 
-          state: { from: location.pathname } 
+        navigate('/login', {
+          replace: true,
+          state: { from: location.pathname }
         });
       } else {
         // ✅ Additional role check
         try {
           const userData = JSON.parse(userStr);
           const actualUser = userData.user || userData;
-          const isRegulator = 
-            actualUser.type === 'regulator' || 
+          const isRegulator =
+            actualUser.type === 'regulator' ||
             actualUser.role === 'regulator';
 
           if (isRegulator) {
@@ -336,7 +327,7 @@ const DashboardUser = () => {
         return;
       }
 
-      const API_BASE_URL = getApiBaseUrl();
+      const API_BASE_URL = STATIC_BASE_URL;
       console.log("🔌 API Base URL:", API_BASE_URL);
 
       // Fetch user profile
@@ -345,12 +336,12 @@ const DashboardUser = () => {
       });
 
       if (!userRes.ok) throw new Error('Failed to fetch user data');
-      
+
       const userData = await userRes.json();
-      
+
       // ✅ CRITICAL: Check if fetched user is regulator
-      const isRegulator = 
-        userData.type === 'regulator' || 
+      const isRegulator =
+        userData.type === 'regulator' ||
         userData.role === 'regulator';
 
       if (isRegulator) {
@@ -367,22 +358,22 @@ const DashboardUser = () => {
       });
 
       if (!projRes.ok) throw new Error('Failed to fetch projects');
-      
+
       const projData = await projRes.json();
       setProjects(projData.data || []);
 
       console.log('📊 Fetching certificate stats...');
       const certStatsRes = await fetch(
-        `${API_BASE_URL}/api/certificates/my-certificates/stats`, 
+        `${API_BASE_URL}/api/certificates/my-certificates/stats`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-  
+
       let activeCertificatesCount = 0;
       if (certStatsRes.ok) {
         const certStatsData = await certStatsRes.json();
-        
+
         if (certStatsData.success) {
           activeCertificatesCount = certStatsData.data.active_on_marketplace || 0;
           console.log('✅ Certificate Stats Loaded - Active on Marketplace:', activeCertificatesCount);
@@ -390,7 +381,7 @@ const DashboardUser = () => {
       } else {
         console.warn('⚠️ Failed to fetch certificate stats:', certStatsRes.status);
       }
-  
+
       setActiveCertificatesCount(activeCertificatesCount);
 
       // Create recent activities
@@ -402,10 +393,10 @@ const DashboardUser = () => {
           p.is_validated === 0
             ? "Awaiting regulator validation"
             : p.is_validated === 1
-            ? "Already active"
-            : p.is_validated === 2
-            ? `Rejected: ${p.rejected_reason || "-"}`
-            : "Unknown status",
+              ? "Already active"
+              : p.is_validated === 2
+                ? `Rejected: ${p.rejected_reason || "-"}`
+                : "Unknown status",
         date: p.created_at,
       }));
       setActivities(act);
@@ -425,18 +416,18 @@ const DashboardUser = () => {
       console.log('✅ Dashboard data loaded successfully');
     } catch (err) {
       console.error("❌ Fetch dashboard error:", err);
-      
+
       let errorMessage = 'Failed to load dashboard data';
-      
+
       if (err.response?.status === 401) {
         errorMessage = 'Session expired. Please login again.';
         setTimeout(() => navigate('/login'), 2000);
       } else if (err.response?.status === 500) {
         errorMessage = 'Server error. Please try again later.';
-      } else if (! navigator.onLine) {
+      } else if (!navigator.onLine) {
         errorMessage = 'No internet connection. ';
       }
-      
+
       toast.error(errorMessage, { duration: 5000, icon: '⚠️' });
     } finally {
       setIsLoading(false);
@@ -445,7 +436,7 @@ const DashboardUser = () => {
 
   // ✅ Fetch data only once when conditions are met
   useEffect(() => {
-    if (! loading && isAuthenticated() && isMainDashboard && !hasFetchedData.current) {
+    if (!loading && isAuthenticated() && isMainDashboard && !hasFetchedData.current) {
       console.log('📊 [DashboardUser] Fetching data...');
       fetchData();
     }
@@ -453,7 +444,7 @@ const DashboardUser = () => {
 
   // ✅ Reset fetch flag when leaving dashboard
   useEffect(() => {
-    if (! isMainDashboard) {
+    if (!isMainDashboard) {
       hasFetchedData.current = false;
     }
   }, [isMainDashboard]);
@@ -471,7 +462,7 @@ const DashboardUser = () => {
             <p className="text-sm text-gray-600">You will be signed out of your account</p>
           </div>
         </div>
-        
+
         <div className="flex gap-3">
           <button
             onClick={() => toast.dismiss(t.id)}
@@ -504,18 +495,18 @@ const DashboardUser = () => {
       },
     });
   };
-  
+
   const performLogout = () => {
     try {
       console.log('🔓 [DashboardUser] Performing logout...');
-      
+
       // ✅ Set logging out state
       setIsLoggingOut(true);
-      
+
       // ✅ Smooth fade out (300ms)
       document.body.style.opacity = '0';
       document.body.style.transition = 'opacity 300ms ease-out';
-      
+
       setTimeout(() => {
         // ✅ Clear all state
         setCompany(null);
@@ -525,17 +516,17 @@ const DashboardUser = () => {
         setIsMobileMenuOpen(false);
         hasFetchedData.current = false;
         hasCheckedRole.current = false;
-        
+
         // ✅ Perform logout
         logout();
-        
+
         // ✅ Navigate
         navigate('/', { replace: true }); // or '/login'
-        
+
         // ✅ Fade back in
         setTimeout(() => {
           document.body.style.opacity = '1';
-          
+
           // ✅ Show success toast
           toast.success(
             <div className="flex items-center gap-3">
@@ -556,11 +547,11 @@ const DashboardUser = () => {
               },
             }
           );
-          
+
           setIsLoggingOut(false);
         }, 100);
       }, 300); // Wait for fade out
-      
+
     } catch (error) {
       console.error("❌ Logout error:", error);
       document.body.style.opacity = '1';
@@ -570,7 +561,7 @@ const DashboardUser = () => {
   };
 
   const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(! isMobileMenuOpen);
+    setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
   const closeMobileMenu = () => {
@@ -601,7 +592,7 @@ const DashboardUser = () => {
           onClick={toggleMobileMenu}
           className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
         >
-          {isMobileMenuOpen ?  <FiX size={24} /> : <FiMenu size={24} />}
+          {isMobileMenuOpen ? <FiX size={24} /> : <FiMenu size={24} />}
         </button>
       </div>
 
@@ -649,7 +640,7 @@ const DashboardUser = () => {
             icon={FiGrid}
             label="Dashboard"
             to="/dashboard"
-            isExpanded={window.innerWidth < 768 ?  true : isExpanded}
+            isExpanded={window.innerWidth < 768 ? true : isExpanded}
             isActive={isMainDashboard}
             requireAuth={true}
             onClick={closeMobileMenu}
@@ -703,7 +694,7 @@ const DashboardUser = () => {
             icon={FiUser}
             label="Profile"
             to="/dashboard/profile"
-            isExpanded={window.innerWidth < 768 ?  true : isExpanded}
+            isExpanded={window.innerWidth < 768 ? true : isExpanded}
             isActive={location.pathname === "/dashboard/profile"}
             requireAuth={true}
             onClick={closeMobileMenu}
@@ -712,10 +703,10 @@ const DashboardUser = () => {
 
         {/* User Info & Login/Logout */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white">
-          {isAuthenticated() && (company || user) ?  (
+          {isAuthenticated() && (company || user) ? (
             <div className="flex items-center justify-between gap-2">
-              <Link 
-                to="/dashboard/profile" 
+              <Link
+                to="/dashboard/profile"
                 onClick={closeMobileMenu}
                 className="flex items-center gap-3 min-w-0 hover:opacity-80 transition flex-1"
               >
@@ -771,14 +762,14 @@ const DashboardUser = () => {
         ${isExpanded ? 'md:ml-64' : 'md:ml-20'}
       `}>
         {/* ✅ CRITICAL: Show loading spinner while logging out */}
-        {isLoggingOut ?  (
+        {isLoggingOut ? (
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
               <p className="text-gray-600 font-medium">Logging out...</p>
             </div>
           </div>
-        ) : isMainDashboard ?  (
+        ) : isMainDashboard ? (
           isAuthenticated() ? (
             // ✅ Authenticated Dashboard
             <div>
@@ -879,7 +870,7 @@ const DashboardUser = () => {
                     <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-lg border border-gray-100">
                       <h3 className="text-lg sm:text-xl font-bold text-gray-800 mb-4 sm:mb-6">Upcoming Schedule</h3>
                       <div className="space-y-3 sm:space-y-4">
-                        {schedules.length > 0 ?  (
+                        {schedules.length > 0 ? (
                           schedules.map((s) => (
                             <Link
                               to={`/dashboard/project/${s.projectId}`}
@@ -915,7 +906,7 @@ const DashboardUser = () => {
               <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 sm:p-8 text-white shadow-lg">
                 <h1 className="text-2xl sm:text-3xl font-bold mb-3">Welcome to ChainCarbon!  🌱</h1>
                 <p className="text-blue-50 mb-6 text-sm sm:text-base">
-                  Login to access your dashboard, manage projects, and trade carbon credits. 
+                  Login to access your dashboard, manage projects, and trade carbon credits.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   <Link

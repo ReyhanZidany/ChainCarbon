@@ -1,7 +1,7 @@
 // backend/controllers/authController.js
 import db from "../config/db.js";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 function generateCompanyId() {
   return "C" + Math.floor(100 + Math.random() * 900);
@@ -15,7 +15,7 @@ export const registerUser = async (req, res) => {
 
   // Validation (keep existing validation code)
   if (!email || !password || !company) {
-    return res.status(400).json({ 
+    return res.status(400).json({
       success: false,
       message: "Email, password, and company name are required",
       error: "MISSING_REQUIRED_FIELDS"
@@ -25,7 +25,7 @@ export const registerUser = async (req, res) => {
   // Email format validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
-    return res.status(400).json({ 
+    return res.status(400).json({
       success: false,
       message: "Please enter a valid email address",
       error: "INVALID_EMAIL_FORMAT"
@@ -34,7 +34,7 @@ export const registerUser = async (req, res) => {
 
   // Password strength validation
   if (password.length < 6) {
-    return res.status(400).json({ 
+    return res.status(400).json({
       success: false,
       message: "Password must be at least 6 characters long",
       error: "WEAK_PASSWORD"
@@ -56,7 +56,7 @@ export const registerUser = async (req, res) => {
       (err, result) => {
         if (err) {
           console.error("❌ Database registration error:", err);
-          
+
           if (err.code === "ER_DUP_ENTRY") {
             // Duplicate Company ID
             if (err.sqlMessage.includes("company_id")) {
@@ -66,7 +66,7 @@ export const registerUser = async (req, res) => {
                 error: "COMPANY_ID_DUPLICATE"
               });
             }
-          
+
             // Duplicate Email
             if (err.sqlMessage.includes("email")) {
               return res.status(409).json({
@@ -75,16 +75,16 @@ export const registerUser = async (req, res) => {
                 error: "EMAIL_ALREADY_EXISTS"
               });
             }
-          
+
             // Generic duplicate fallback
             return res.status(409).json({
               success: false,
               message: "Duplicate entry detected.",
               error: "DUPLICATE_ENTRY"
             });
-          }          
-          
-          return res.status(500).json({ 
+          }
+
+          return res.status(500).json({
             success: false,
             message: "Failed to register user. Please try again later.",
             error: "DATABASE_ERROR",
@@ -123,7 +123,7 @@ export const registerUser = async (req, res) => {
     );
   } catch (error) {
     console.error("❌ Server error during registration:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
       message: "An unexpected error occurred. Please try again later.",
       error: "SERVER_ERROR",
@@ -137,10 +137,10 @@ export const registerUser = async (req, res) => {
 //
 export const loginUser = (req, res) => {
   const { email, password } = req.body;
-  
+
   // Validation
   if (!email || !password) {
-    return res.status(400).json({ 
+    return res.status(400).json({
       success: false,
       message: "Email and password are required",
       error: "MISSING_CREDENTIALS"
@@ -148,20 +148,20 @@ export const loginUser = (req, res) => {
   }
 
   const sql = "SELECT * FROM users WHERE LOWER(email) = LOWER(?)";
-  
+
   db.query(sql, [email], async (err, results) => {
     if (err) {
       console.error("❌ Database error during login:", err);
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
         message: "Database connection error. Please try again later.",
         error: "DATABASE_ERROR",
         details: process.env.NODE_ENV === 'development' ? err.message : undefined
       });
     }
-    
+
     if (results.length === 0) {
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
         message: "Invalid email or password. Please check your credentials and try again.",
         error: "INVALID_CREDENTIALS"
@@ -169,12 +169,12 @@ export const loginUser = (req, res) => {
     }
 
     const user = results[0];
-    
+
     try {
       const isPasswordValid = await bcrypt.compare(password, user.password);
-      
+
       if (!isPasswordValid) {
-        return res.status(401).json({ 
+        return res.status(401).json({
           success: false,
           message: "Invalid email or password. Please check your credentials and try again.",
           error: "INVALID_CREDENTIALS"
@@ -186,8 +186,8 @@ export const loginUser = (req, res) => {
         console.log("⚠️ Login blocked - Account not validated");
         console.log("   User:", user.email);
         console.log("   Company:", user.company);
-        
-        return res.status(403).json({ 
+
+        return res.status(403).json({
           success: false,
           message: "Your account is pending validation",
           error: "ACCOUNT_NOT_VALIDATED",
@@ -244,17 +244,17 @@ export const loginUser = (req, res) => {
       console.log("   Validated:", safeUser.isValidated);
       console.log("   Last Login:", new Date().toISOString());
 
-      return res.status(200).json({ 
+      return res.status(200).json({
         success: true,
         message: `Welcome back, ${safeUser.name}!`,
         token,
         user: safeUser,
         expiresIn: "24h"
       });
-      
+
     } catch (error) {
       console.error("❌ Server error during login:", error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
         message: "An unexpected error occurred during login. Please try again.",
         error: "SERVER_ERROR",
@@ -271,19 +271,19 @@ export const getUserProfile = (req, res) => {
   const userId = req.user.id;
 
   const sql = "SELECT id, email, company, company_id, website, type, role, province, city, is_validated, created_at, updated_at FROM users WHERE id = ?";
-  
+
   db.query(sql, [userId], (err, results) => {
     if (err) {
       console.error("❌ Database error fetching user profile:", err);
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
         message: "Failed to fetch user profile",
         error: "DATABASE_ERROR"
       });
     }
-    
+
     if (results.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
         message: "User not found",
         error: "USER_NOT_FOUND"
@@ -291,7 +291,7 @@ export const getUserProfile = (req, res) => {
     }
 
     const user = results[0];
-    return res.status(200).json({ 
+    return res.status(200).json({
       success: true,
       user: {
         id: user.id,
@@ -318,13 +318,64 @@ export const getUserProfile = (req, res) => {
 export const logoutUser = (req, res) => {
   // JWT is stateless, so logout is handled client-side by removing the token
   // This endpoint is optional and can be used for logging purposes
-  
+
   console.log("👋 User logged out");
   console.log("   User ID:", req.user?.id);
   console.log("   Email:", req.user?.email);
-  
-  return res.status(200).json({ 
+
+  return res.status(200).json({
     success: true,
     message: "Logged out successfully. Please clear your token on the client side."
+  });
+};
+
+//
+// ===================== GET ME (Profile via Token) =====================
+//
+export const getMe = (req, res) => {
+  const userId = req.user.id; // From middleware
+
+  const sql = `
+    SELECT 
+      id, email, company, website, province, city, 
+      role, type, is_validated, created_at
+    FROM users 
+    WHERE id = ?
+  `;
+
+  db.query(sql, [userId], (err, results) => {
+    if (err) {
+      console.error("❌ DB error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch user profile"
+      });
+    }
+
+    if (results.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    const user = results[0];
+    console.log(`👤 [AUTH] User authenticated: ${user.company || user.email}`);
+
+    res.json({
+      success: true,
+      user: {
+        user_id: user.id,
+        name: user.company || user.email,
+        email: user.email,
+        company: user.company,
+        website: user.website,
+        role: user.role,
+        type: user.type,
+        province: user.province,
+        city: user.city,
+        is_validated: user.is_validated
+      }
+    });
   });
 };

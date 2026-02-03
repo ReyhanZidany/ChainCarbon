@@ -722,7 +722,7 @@ export const submitProject = async (req, res) => {
        est_volume, price_per_unit, start_date, end_date, doc_path, images_json, is_validated)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `;
-    
+
     try {
       await queryAsync(insertSql, [
         projectId, userId, companyId,
@@ -760,8 +760,8 @@ export const submitProject = async (req, res) => {
     } catch (err) {
       console.error("Fabric submitProject error:", err.response?.data || err.message);
       console.log("↩️ Rolling back project from MySQL:", projectId);
-    
-          // ROLLBACK row di MySQL supaya nggak ada project 'nggantung' off-chain saja
+
+      // ROLLBACK row di MySQL supaya nggak ada project 'nggantung' off-chain saja
       try {
         await queryAsync(
           "DELETE FROM projects WHERE project_id = ?",
@@ -798,16 +798,496 @@ export const getPendingProjects = (req, res) => {
     WHERE p.is_validated = 0
     ORDER BY p.created_at DESC
   `;
-  
-  db.query(sql, [], (err, rows) => {
+
+  db.query(sql, (err, rows) => {
     if (err) {
-      console.error("Get pending projects error:", err);
-      return res.status(500).json({ 
+      console.error("Error fetching pending projects:", err);
+      return res.status(500).json({ success: false, message: "Database error" });
+    }
+    console.log(`Found ${rows.length} pending projects`);
+
+    // Add "is_new" flag
+    const data = rows.map(p => ({
+      ...p,
+      is_new: (new Date() - new Date(p.created_at)) / (1000 * 60 * 60 * 24) <= 3
+    }));
+
+    res.json({ success: true, data });
+  });
+};
+
+// ============================================
+// NEW CONTROLLER FUNCTIONS (Refactored from Routes)
+// ============================================
+
+// GET /api/projects
+export const getAllProjects = (req, res) => {
+  console.log("\n📋 GET /api/projects (default)");
+
+  const sql = `
+    SELECT 
+      p.project_id,
+      p.user_id,
+      p.company_id,
+      p.category,
+      p.title,
+      p.location,
+      p.description,
+      p.start_date,
+      p.end_date,
+      p.est_volume,
+      p.price_per_unit,
+      p.is_validated,
+      p.created_at,
+      p.updated_at,
+      u.company as company_name,
+      u.email as company_email,
+      COUNT(c.cert_id) as certificate_count
+    FROM projects p
+    LEFT JOIN users u ON p.company_id = u.company_id
+    LEFT JOIN certificates c ON p.project_id = c.project_id
+    WHERE p.is_validated = 1
+    GROUP BY p.project_id
+    ORDER BY p.created_at DESC
+  `;
+
+  db.query(sql, (err, rows) => {
+    if (err) {
+      console.error("❌ Error fetching projects:", err);
+      return res.status(500).json({
         success: false,
-        message: "DB error" 
+        message: "Database error",
+        error: err.message
       });
     }
-    return res.json({ success: true, data: rows });
+
+    console.log(`✅ Found ${rows.length} validated projects`);
+
+    return res.json({
+      success: true,
+      data: rows,
+      total: rows.length
+    });
+  });
+};
+
+// GET /api/projects/all
+export const getAllProjectsWithStats = (req, res) => {
+  console.log("\n📋 GET /api/projects/all");
+
+  const sql = `
+    SELECT 
+      p.project_id,
+      p.user_id,
+      p.company_id,
+      p.category,
+      p.title,
+      p.location,
+      p.description,
+      p.start_date,
+      p.end_date,
+      p.est_volume,
+      p.price_per_unit,
+      p.is_validated,
+      p.created_at,
+      p.updated_at,
+      u.company as company_name,
+      u.email as company_email,
+      COUNT(c.cert_id) as certificate_count
+    FROM projects p
+    LEFT JOIN users u ON p.company_id = u.company_id
+    LEFT JOIN certificates c ON p.project_id = c.project_id
+    WHERE p.is_validated = 1
+    GROUP BY p.project_id
+    ORDER BY p.created_at DESC
+  `;
+
+  db.query(sql, (err, rows) => {
+    if (err) {
+      console.error("❌ Error fetching all projects:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Database error",
+        error: err.message
+      });
+    }
+
+    console.log(`✅ Found ${rows.length} validated projects`);
+
+    const enrichedProjects = rows.map(project => ({
+      ...project,
+      age_days: Math.floor((new Date() - new Date(project.created_at)) / (1000 * 60 * 60 * 24)),
+      is_new: Math.floor((new Date() - new Date(project.created_at)) / (1000 * 60 * 60 * 24)) <= 30
+    }));
+
+    return res.json({
+      success: true,
+      data: enrichedProjects,
+      total: enrichedProjects.length
+    });
+  });
+};
+
+// GET /api/projects/mine
+export const getMyProjects = (req, res) => {
+  console.log("\n📝 GET /api/projects/mine");
+  const userId = req.user.id;
+
+  console.log("  User ID:", userId);
+
+  const sql = `
+    SELECT 
+      p.*,
+      u.company as company_name,
+      u.email as company_email,
+      COUNT(c.cert_id) as certificate_count
+    FROM projects p
+    LEFT JOIN users u ON p.company_id = u.company_id
+    LEFT JOIN certificates c ON p.project_id = c.project_id
+    WHERE p.user_id = ?
+    GROUP BY p.project_id
+    ORDER BY p.created_at DESC
+  `;
+
+  db.query(sql, [userId], (err, rows) => {
+    if (err) {
+      console.error("❌ Error fetching user projects:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Database error",
+        error: err.message
+      });
+    }
+
+    console.log(`✅ Found ${rows.length} projects for user ${userId}`);
+
+    return res.json({
+      success: true,
+      data: rows
+    });
+  });
+};
+
+// GET /api/projects/mine-all
+export const getMyAllProjects = (req, res) => {
+  const userId = req.user?.id;
+  const companyId = req.user?.companyId;
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: "Unauthorized"
+    });
+  }
+
+  console.log("\n📝 GET /api/projects/mine-all");
+  console.log("  User ID:", userId);
+  console.log("  Company ID:", companyId);
+
+  const sql = `
+    SELECT 
+      p.*,
+      c.cert_id,
+      c.status as cert_status,
+      c.owner_company_id as cert_owner,
+      c.amount as cert_amount,
+      c.listed as cert_listed,
+      CASE 
+        WHEN c.cert_id IS NULL THEN 0
+        WHEN c.owner_company_id != ? THEN 1
+        ELSE 0
+      END as is_sold,
+      buyer.company as buyer_company,
+      ct.transaction_date as sold_date,
+      ct.total_price as sold_price
+    FROM projects p
+    LEFT JOIN certificates c ON c.project_id = p.project_id
+    LEFT JOIN certificate_transactions ct ON ct.cert_id = c.cert_id
+    LEFT JOIN users buyer ON buyer.company_id = ct.buyer_company_id
+    WHERE p.user_id = ? 
+    ORDER BY p.created_at DESC
+  `;
+
+  db.query(sql, [companyId, userId], (err, rows) => {
+    if (err) {
+      console.error("❌ Error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Database error",
+        error: err.message
+      });
+    }
+
+    console.log(`✅ Found ${rows.length} projects`);
+
+    return res.json({
+      success: true,
+      data: rows
+    });
+  });
+};
+
+// GET /api/projects/regulator/rejected-projects
+export const getRejectedProjects = (req, res) => {
+  console.log("\n🚫 GET /api/projects/regulator/rejected-projects");
+
+  const days = parseInt(req.query.days) || 30;
+
+  const sql = `
+    SELECT 
+      rp.*,
+      p.title,
+      p.category,
+      p.location,
+      p.description,
+      p.start_date,
+      p.end_date,
+      p.est_volume,
+      p.price_per_unit,
+      p.created_at,
+      u.company as company_name,
+      u.email
+    FROM rejected_projects rp
+    INNER JOIN projects p ON rp.project_id = p.project_id
+    LEFT JOIN users u ON p.company_id = u.company_id
+    WHERE rp.rejected_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+    ORDER BY rp.rejected_at DESC
+  `;
+
+  db.query(sql, [days], (err, results) => {
+    if (err) {
+      console.error("❌ Error fetching rejected projects:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Database error",
+        error: err.message
+      });
+    }
+
+    console.log(`✅ Found ${results.length} rejected projects (last ${days} days)`);
+
+    return res.json({
+      success: true,
+      data: results,
+      total: results.length
+    });
+  });
+};
+
+// PUT /api/projects/:id
+export const updateProject = (req, res) => {
+  console.log("\n📝 PUT /api/projects/:id");
+  const projectId = req.params.id;
+  const userId = req.user.id;
+
+  console.log("  Project ID:", projectId);
+  console.log("  User ID:", userId);
+
+  const checkSql = `
+    SELECT project_id, user_id, is_validated 
+    FROM projects 
+    WHERE project_id = ? 
+  `;
+
+  db.query(checkSql, [projectId], (err, results) => {
+    if (err) {
+      console.error("❌ Database error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Database error",
+        error: err.message
+      });
+    }
+
+    if (results.length === 0) {
+      console.log("❌ Project not found");
+      return res.status(404).json({
+        success: false,
+        message: "Project not found"
+      });
+    }
+
+    const project = results[0];
+
+    if (project.user_id !== userId) {
+      console.log("❌ Unauthorized");
+      return res.status(403).json({
+        success: false,
+        message: "You don't have permission to update this project"
+      });
+    }
+
+    if (project.is_validated === 1) {
+      console.log("❌ Cannot edit validated project");
+      return res.status(400).json({
+        success: false,
+        message: "Cannot edit validated projects"
+      });
+    }
+
+    const {
+      title,
+      category,
+      location,
+      description,
+      start_date,
+      end_date,
+      est_volume,
+      price_per_unit,
+      methodology
+    } = req.body;
+
+    const updateSql = `
+      UPDATE projects
+      SET 
+        title = ?,
+        category = ?,
+        location = ?,
+        description = ?,
+        start_date = ?,
+        end_date = ?,
+        est_volume = ?,
+        price_per_unit = ?,
+        methodology = ?,
+        updated_at = NOW()
+      WHERE project_id = ?
+    `;
+
+    const values = [
+      title,
+      category,
+      location,
+      description,
+      start_date,
+      end_date,
+      est_volume,
+      price_per_unit,
+      methodology,
+      projectId
+    ];
+
+    db.query(updateSql, values, (err, result) => {
+      if (err) {
+        console.error("❌ Update error:", err);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to update project",
+          error: err.message
+        });
+      }
+
+      console.log("✅ Project updated successfully");
+
+      return res.json({
+        success: true,
+        message: "Project updated successfully",
+        data: {
+          project_id: projectId,
+          updated_at: new Date()
+        }
+      });
+    });
+  });
+};
+
+// DELETE /api/projects/:id
+export const deleteProject = (req, res) => {
+  console.log("\n🗑️ DELETE /api/projects/:id");
+  const projectId = req.params.id;
+  const userId = req.user.id;
+
+  console.log("  Project ID:", projectId);
+  console.log("  User ID:", userId);
+
+  const checkSql = `
+    SELECT 
+      project_id, 
+      user_id, 
+      is_validated,
+      title
+    FROM projects 
+    WHERE project_id = ?
+  `;
+
+  db.query(checkSql, [projectId], (err, results) => {
+    if (err) {
+      console.error("❌ Database error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Database error",
+        error: err.message
+      });
+    }
+
+    if (results.length === 0) {
+      console.log("❌ Project not found");
+      return res.status(404).json({
+        success: false,
+        message: "Project not found"
+      });
+    }
+
+    const project = results[0];
+
+    if (project.user_id !== userId) {
+      console.log("❌ Unauthorized");
+      return res.status(403).json({
+        success: false,
+        message: "You don't have permission to delete this project"
+      });
+    }
+
+    if (project.is_validated === 1) {
+      console.log("❌ Cannot delete validated project");
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete validated projects. Contact administrator."
+      });
+    }
+
+    const certCheckSql = `SELECT COUNT(*) as cert_count FROM certificates WHERE project_id = ?`;
+
+    db.query(certCheckSql, [projectId], (err, certResults) => {
+      if (err) {
+        console.error("❌ Error checking certificates:", err);
+        return res.status(500).json({
+          success: false,
+          message: "Database error"
+        });
+      }
+
+      if (certResults[0].cert_count > 0) {
+        console.log("❌ Cannot delete: has certificates");
+        return res.status(400).json({
+          success: false,
+          message: "Cannot delete projects with issued certificates"
+        });
+      }
+
+      const deleteSql = `DELETE FROM projects WHERE project_id = ? `;
+
+      db.query(deleteSql, [projectId], (err, result) => {
+        if (err) {
+          console.error("❌ Delete error:", err);
+          return res.status(500).json({
+            success: false,
+            message: "Failed to delete project",
+            error: err.message
+          });
+        }
+
+        console.log(`✅ Project "${project.title}" deleted successfully`);
+
+        return res.json({
+          success: true,
+          message: "Project deleted successfully",
+          data: {
+            project_id: projectId,
+            title: project.title
+          }
+        });
+      });
+    });
   });
 };
 
@@ -819,13 +1299,13 @@ export const validateProject = async (req, res) => {
   console.log("=== VALIDATE PROJECT START ===");
   console.log("=".repeat(60));
   console.log("Request body:", JSON.stringify(req.body, null, 2));
-  
+
   try {
     const { projectId, certAmount, certPricePerUnit, expiresAt } = req.body;
     if (!projectId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "projectId is required" 
+        message: "projectId is required"
       });
     }
 
@@ -867,14 +1347,14 @@ export const validateProject = async (req, res) => {
     // ============================================
     console.log("\n[STEP 2] Validating project in Fabric...");
     console.log("   URL:", `${FABRIC_API}/projects/${projectId}/validate`);
-    
+
     try {
       const fabricValidateRes = await axios.post(
         `${FABRIC_API}/projects/${projectId}/validate`,
         {},
-        { 
+        {
           headers: { "Content-Type": "application/json" },
-          timeout: 10000 
+          timeout: 10000
         }
       );
       console.log("✅ Fabric validate SUCCESS");
@@ -883,10 +1363,9 @@ export const validateProject = async (req, res) => {
       console.error("❌ Fabric validate FAILED");
       console.error("   Status:", fabricErr.response?.status);
       console.error("   Error:", fabricErr.response?.data);
-      
+
       throw new Error(
-        `Failed to validate project in Fabric: ${
-          fabricErr.response?.data?.error || fabricErr.message
+        `Failed to validate project in Fabric: ${fabricErr.response?.data?.error || fabricErr.message
         }`
       );
     }
@@ -899,25 +1378,25 @@ export const validateProject = async (req, res) => {
     // STEP 3: Generate certificate ID
     // ============================================
     console.log("\n[STEP 3] Generating certificate ID...");
-    
+
     const certId = await genUniqueId({
       prefix: "CERT",
       digits: 6,
       checkDb: checkCertificateExists,
       checkBlockchain: checkCertificateInBlockchain
     });
-    
+
     console.log("✅ Certificate ID generated:", certId);
 
     // ============================================
     // STEP 4: Prepare certificate payload
     // ============================================
     console.log("\n[STEP 4] Preparing certificate payload...");
-    
+
     const amount = parseInt(certAmount || project.est_volume || 1000);
     const price = parseInt(certPricePerUnit || project.price_per_unit || 10000);
-    const expiresAtTimestamp = expiresAt 
-      ? new Date(expiresAt).getTime() 
+    const expiresAtTimestamp = expiresAt
+      ? new Date(expiresAt).getTime()
       : (Date.now() + (10 * 365 * 24 * 60 * 60 * 1000)); // 10 years
 
     const payloadCert = {
@@ -928,7 +1407,7 @@ export const validateProject = async (req, res) => {
       pricePerUnit: price,
       expiresAt: expiresAtTimestamp
     };
-    
+
     console.log("✅ Certificate payload:");
     console.log("   ID:", payloadCert.id);
     console.log("   Project ID:", payloadCert.projectId);
@@ -936,7 +1415,7 @@ export const validateProject = async (req, res) => {
     console.log("   Amount:", payloadCert.amount);
     console.log("   Price per Unit:", payloadCert.pricePerUnit);
     console.log("   Expires At:", new Date(payloadCert.expiresAt).toISOString());
-    
+
     // Validation
     if (amount <= 0 || price <= 0 || !payloadCert.ownerId) {
       throw new Error("Certificate data not valid (amount, price, ownerId required and positive)");
@@ -948,7 +1427,7 @@ export const validateProject = async (req, res) => {
     console.log("\n[STEP 5] Creating certificate in Fabric...");
     console.log("   URL:", `${FABRIC_API}/certificates`);
     console.log("   Payload:", JSON.stringify(payloadCert, null, 2));
-    
+
     let fabricCertResponse;
     try {
       fabricCertResponse = await axios.post(
@@ -959,11 +1438,11 @@ export const validateProject = async (req, res) => {
           timeout: 10000,
         }
       );
-      
+
       console.log("✅ Fabric create certificate SUCCESS");
       console.log("   Response status:", fabricCertResponse.status);
       console.log("   Response data:", JSON.stringify(fabricCertResponse.data, null, 2));
-      
+
     } catch (fabricErr) {
       console.error("❌ Fabric create certificate FAILED");
       console.error("   Status:", fabricErr.response?.status);
@@ -972,8 +1451,7 @@ export const validateProject = async (req, res) => {
       console.error("   Request payload:", JSON.stringify(payloadCert, null, 2));
 
       throw new Error(
-        `Failed to create certificate in Fabric: ${
-          fabricErr.response?.data?.error || fabricErr.message
+        `Failed to create certificate in Fabric: ${fabricErr.response?.data?.error || fabricErr.message
         }`
       );
     }
@@ -984,20 +1462,20 @@ export const validateProject = async (req, res) => {
     console.log("\n[STEP 6] Verifying certificate exists in blockchain...");
     console.log("   Waiting 2 seconds for blockchain confirmation...");
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     let verificationAttempts = 0;
     let certExists = false;
     const maxAttempts = 5;
-    
+
     while (verificationAttempts < maxAttempts && !certExists) {
       try {
         console.log(`   Verification attempt ${verificationAttempts + 1}/${maxAttempts}...`);
-        
+
         const verifyRes = await axios.get(
           `${FABRIC_API}/certificates/${certId}`,
           { timeout: 5000 }
         );
-        
+
         if (verifyRes.data && verifyRes.data.certId === certId) {
           console.log("✅ Certificate verified in blockchain!");
           console.log("   Certificate data:", JSON.stringify(verifyRes.data, null, 2));
@@ -1011,10 +1489,10 @@ export const validateProject = async (req, res) => {
           console.warn("   Verification check failed:", verifyErr.message);
         }
       }
-      
+
       verificationAttempts++;
     }
-    
+
     if (!certExists) {
       console.error("❌ Certificate NOT found in blockchain after", maxAttempts, "attempts");
       throw new Error("Certificate created but not found in blockchain. Please verify manually.");
@@ -1030,14 +1508,14 @@ export const validateProject = async (req, res) => {
     // STEP 8: Save certificate to MySQL
     // ============================================
     console.log("\n[STEP 8] Saving certificate to MySQL...");
-    
+
     try {
       const certSql = `
         INSERT INTO certificates
         (cert_id, project_id, owner_company_id, amount, price_per_unit, status, listed, issued_at, expires_at)
         VALUES (?, ?, ?, ?, ?, 'ISSUED', 0, FROM_UNIXTIME(?/1000), FROM_UNIXTIME(?/1000))
       `;
-      
+
       await queryAsync(certSql, [
         certId,
         projectId,
@@ -1047,9 +1525,9 @@ export const validateProject = async (req, res) => {
         Date.now(),
         expiresAtTimestamp
       ]);
-      
+
       console.log("✅ MySQL certificate inserted");
-      
+
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY') {
         console.warn(`⚠️ Certificate '${certId}' already exists in MySQL. Skipping insert.`);
@@ -1062,7 +1540,7 @@ export const validateProject = async (req, res) => {
     // STEP 9: Send approval email
     // ============================================
     console.log("\n[STEP 9] Sending approval email...");
-    
+
     try {
       await sendProjectApprovalEmail(project, {
         cert_id: certId,
@@ -1070,9 +1548,9 @@ export const validateProject = async (req, res) => {
         price_per_unit: price,
         expires_at: expiresAtTimestamp
       });
-      
+
       console.log("✅ Approval email sent to:", project.user_email);
-      
+
     } catch (emailErr) {
       console.error("⚠️ Failed to send approval email:", emailErr.message);
       // Don't fail the request if email fails
@@ -1100,11 +1578,11 @@ export const validateProject = async (req, res) => {
       message: "Project validated and certificate issued successfully",
       email_sent: true,
       blockchain_verified: true,
-      project: { 
-        projectId, 
+      project: {
+        projectId,
         is_validated: 1,
         regulatorValidated: true,
-        title: project.title 
+        title: project.title
       },
       certificate: {
         id: certId,
@@ -1126,7 +1604,7 @@ export const validateProject = async (req, res) => {
     console.error("Error:", err.message);
     console.error("Stack:", err.stack);
     console.error("=".repeat(60) + "\n");
-    
+
     return res.status(500).json({
       success: false,
       message: "Error validating project",
@@ -1141,15 +1619,15 @@ export const validateProject = async (req, res) => {
 // ========================================
 export const rejectProject = async (req, res) => {
   const { projectId, reason } = req.body;
-  
+
   console.log("\n❌ REJECTING PROJECT");
   console.log("   Project ID:", projectId);
   console.log("   Reason:", reason);
-  
+
   if (!projectId || !reason) {
-    return res.status(400).json({ 
+    return res.status(400).json({
       success: false,
-      message: "projectId and reason are required" 
+      message: "projectId and reason are required"
     });
   }
 
@@ -1164,7 +1642,7 @@ export const rejectProject = async (req, res) => {
       LEFT JOIN users u ON p.user_id = u.id
       WHERE p.project_id = ?
     `;
-    
+
     const project = await new Promise((resolve, reject) => {
       db.query(getProjectSql, [projectId], (err, results) => {
         if (err) {
@@ -1198,7 +1676,7 @@ export const rejectProject = async (req, res) => {
 
     // ✅ Send rejection email
     console.log("\n📧 Sending rejection email...");
-    
+
     try {
       await sendProjectRejectionEmail(project, reason);
       console.log("✅ Rejection email sent to:", project.user_email);
@@ -1208,14 +1686,14 @@ export const rejectProject = async (req, res) => {
 
     console.log("\n✅ PROJECT REJECTED\n");
 
-    return res.json({ 
-      success: true, 
-      message: "Proyek ditolak", 
-      projectId, 
+    return res.json({
+      success: true,
+      message: "Proyek ditolak",
+      projectId,
       reason,
       email_sent: true
     });
-    
+
   } catch (error) {
     console.error("❌ Reject project error:", error);
     return res.status(500).json({
@@ -1231,21 +1709,21 @@ export const getProjectById = (req, res) => {
   const { id } = req.params;
 
   db.query(
-    "SELECT * FROM projects WHERE project_id = ?", 
-    [id], 
+    "SELECT * FROM projects WHERE project_id = ?",
+    [id],
     (err, rows) => {
       if (err) {
         console.error("Error getProjectById:", err);
-        return res.status(500).json({ 
-          success: false, 
-          message: "DB error" 
+        return res.status(500).json({
+          success: false,
+          message: "DB error"
         });
       }
 
       if (!rows.length) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "Project not found" 
+        return res.status(404).json({
+          success: false,
+          message: "Project not found"
         });
       }
 
@@ -1257,11 +1735,11 @@ export const getProjectById = (req, res) => {
 // ===== GET PURCHASED PROJECTS (Proyek yang dibeli via marketplace) =====
 export const getMyPurchasedProjects = (req, res) => {
   const companyId = req.user?.companyId;
-  
+
   if (!companyId) {
-    return res.status(401).json({ 
+    return res.status(401).json({
       success: false,
-      message: "Unauthorized" 
+      message: "Unauthorized"
     });
   }
 
@@ -1291,9 +1769,9 @@ export const getMyPurchasedProjects = (req, res) => {
   db.query(sql, [companyId, companyId], (err, rows) => {
     if (err) {
       console.error("Get purchased projects error:", err);
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        message: "DB error" 
+        message: "DB error"
       });
     }
 
@@ -1311,9 +1789,9 @@ export const getMyPurchasedProjects = (req, res) => {
       return row;
     });
 
-    return res.json({ 
-      success: true, 
-      data: processedRows 
+    return res.json({
+      success: true,
+      data: processedRows
     });
   });
 };
